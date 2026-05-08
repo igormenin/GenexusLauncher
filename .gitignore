@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build / Compilação
+build/
+dist/
+*.spec
+*.exe
+*.zip
+
+# Configurações Locais (Não envie seus caminhos de instalação)
+installations.json
+
+# IDEs
+.vscode/
+.idea/
+.project
+.pydevproject
+.settings/

@@ -1,0 +1,940 @@
+import hashlib
+import sys
+import json
+import os
+import queue
+import shutil
+import subprocess
+import threading
+from pathlib import Path
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+
+APP_TITLE = 'GeneXus Launcher'
+# CORREÇÃO: Configuração que funciona com PyInstaller onefile
+if getattr(sys, 'frozen', False) and getattr(sys, '_MEIPASS', False):
+    # Executável PyInstaller - salva na pasta do usuário
+    CONFIG_DIR = Path.home() / ".gxlauncher"
+    CONFIG_FILE = CONFIG_DIR / "installations.json"
+else:
+    # Script Python normal - salva na mesma pasta
+    CONFIG_FILE = Path(__file__).with_name('installations.json')
+
+# Cria diretório se não existir
+CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+DEFAULT_OPEN_ARGS = ['/nolastkb', '/measurecommandtime', '/IdeStyle:silver']
+GXMODULES_PATH = Path.home() / '.gxmodules'
+
+
+def center_window(window, parent=None):
+    window.update_idletasks()
+    width = window.winfo_width() or window.winfo_reqwidth()
+    height = window.winfo_height() or window.winfo_reqheight()
+    if parent is not None and parent.winfo_exists():
+        parent.update_idletasks()
+        x = parent.winfo_rootx() + (parent.winfo_width() - width) // 2
+        y = parent.winfo_rooty() + (parent.winfo_height() - height) // 2
+    else:
+        screen_width = window.winfo_screenwidth()
+        screen_height = window.winfo_screenheight()
+        x = (screen_width - width) // 2
+        y = (screen_height - height) // 2
+    x = max(x, 0)
+    y = max(y, 0)
+    window.geometry(f'{width}x{height}+{x}+{y}')
+
+
+class InstallationStore:
+    def __init__(self, path: Path):
+        self.path = path
+        self.data = {'installations': [], 'last_selected_hash': None}
+        self.load()
+
+    def load(self):
+        if self.path.exists():
+            try:
+                self.data = json.loads(self.path.read_text(encoding='utf-8'))
+                if 'installations' not in self.data or not isinstance(self.data['installations'], list):
+                    self.data['installations'] = []
+                if 'last_selected_hash' not in self.data:
+                    self.data['last_selected_hash'] = None
+            except Exception:
+                self.data = {'installations': [], 'last_selected_hash': None}
+        else:
+            self.data = {'installations': [], 'last_selected_hash': None}
+
+    def save(self):
+        self.path.write_text(json.dumps(self.data, indent=2, ensure_ascii=False), encoding='utf-8')
+
+    def get_all(self):
+        return self.data['installations']
+
+    def _generate_hash(self, name, path):
+        content = f"{name}|{path}".lower()
+        return hashlib.md5(content.encode('utf-8')).hexdigest()
+
+    def is_path_duplicate(self, path, exclude_index=None):
+        target_path = os.path.realpath(os.path.normpath(path)).lower()
+        for i, inst in enumerate(self.data['installations']):
+            if i == exclude_index:
+                continue
+            if os.path.realpath(os.path.normpath(inst['path'])).lower() == target_path:
+                return True
+        return False
+
+    def add(self, item):
+        item['hash'] = self._generate_hash(item['name'], item['path'])
+        self.data['installations'].append(item)
+        self.save()
+
+    def update(self, index, item):
+        item['hash'] = self._generate_hash(item['name'], item['path'])
+        self.data['installations'][index] = item
+        self.save()
+
+    def delete(self, index):
+        del self.data['installations'][index]
+        self.save()
+
+    def get_last_selected_hash(self):
+        return self.data.get('last_selected_hash')
+
+    def set_last_selected_hash(self, hash_value):
+        self.data['last_selected_hash'] = hash_value
+        self.save()
+
+    def move(self, index, direction):
+        # direction: -1 para cima, 1 para baixo
+        new_index = index + direction
+        if 0 <= new_index < len(self.data['installations']):
+            self.data['installations'][index], self.data['installations'][new_index] = \
+                self.data['installations'][new_index], self.data['installations'][index]
+            self.save()
+            return True
+        return False
+
+
+class InstallationDialog(tk.Toplevel):
+    def __init__(self, master, initial=None, edit_index=None):
+        super().__init__(master)
+        self.title('Cadastro de instalação')
+        self.resizable(False, False)
+        self.result = None
+        self.edit_index = edit_index
+        self.transient(master)
+        self.grab_set()
+
+        initial = initial or {}
+
+        self.name_var = tk.StringVar(value=initial.get('name', ''))
+        self.path_var = tk.StringVar(value=initial.get('path', ''))
+        self.ide_style_var = tk.StringVar(value=initial.get('ide_style', 'silver'))
+        self.args_var = tk.StringVar(value=' '.join(initial.get('open_args', DEFAULT_OPEN_ARGS)))
+
+        body = ttk.Frame(self, padding=14)
+        body.grid(sticky='nsew')
+
+        ttk.Label(body, text='Nome').grid(row=0, column=0, sticky='w', pady=(0, 4))
+        ttk.Entry(body, textvariable=self.name_var, width=42).grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+
+        ttk.Label(body, text='Pasta do GeneXus').grid(row=2, column=0, sticky='w', pady=(0, 4))
+        ttk.Entry(body, textvariable=self.path_var, width=42).grid(row=3, column=0, sticky='ew', pady=(0, 10))
+        ttk.Button(body, text='Procurar', command=self.browse).grid(row=3, column=1, padx=(8, 0), pady=(0, 10))
+
+        ttk.Label(body, text='IdeStyle').grid(row=4, column=0, sticky='w', pady=(0, 4))
+        ttk.Entry(body, textvariable=self.ide_style_var, width=42).grid(row=5, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+
+        ttk.Label(body, text='Argumentos de abertura').grid(row=6, column=0, sticky='w', pady=(0, 4))
+        ttk.Entry(body, textvariable=self.args_var, width=42).grid(row=7, column=0, columnspan=2, sticky='ew', pady=(0, 12))
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=8, column=0, columnspan=2, sticky='e')
+        ttk.Button(buttons, text='Cancelar', command=self.destroy).pack(side='right')
+        ttk.Button(buttons, text='Salvar', command=self.on_save).pack(side='right', padx=(0, 8))
+
+        self.columnconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+        self.protocol('WM_DELETE_WINDOW', self.destroy)
+        self.update_idletasks()
+        center_window(self, master)
+
+    def browse(self):
+        selected = filedialog.askdirectory(title='Selecione a pasta do GeneXus')
+        if selected:
+            self.path_var.set(selected)
+            if not self.name_var.get().strip():
+                self.name_var.set(Path(selected).name)
+
+    def on_save(self):
+        gx_path = Path(self.path_var.get().strip())
+        name = self.name_var.get().strip()
+        ide_style = self.ide_style_var.get().strip() or 'silver'
+        raw_args = self.args_var.get().strip()
+        open_args = raw_args.split() if raw_args else DEFAULT_OPEN_ARGS
+
+        if not name:
+            messagebox.showerror(APP_TITLE, 'Informe um nome para a instalação.')
+            return
+        if not gx_path.exists() or not gx_path.is_dir():
+            messagebox.showerror(APP_TITLE, 'Informe uma pasta válida do GeneXus.')
+            return
+        if not (gx_path / 'genexus.exe').exists():
+            messagebox.showerror(APP_TITLE, 'Não foi encontrado genexus.exe na pasta informada.')
+            return
+        if not (gx_path / 'genexus.com').exists():
+            messagebox.showerror(APP_TITLE, 'Não foi encontrado genexus.com na pasta informada.')
+            return
+
+        if self.master.store.is_path_duplicate(gx_path, self.edit_index):
+            messagebox.showerror(APP_TITLE, 'Este caminho de instalação já está cadastrado.')
+            return
+
+        self.result = {
+            'name': name,
+            'path': str(gx_path),
+            'ide_style': ide_style,
+            'open_args': open_args,
+        }
+        
+        # Extrai o ícone agora para salvar no JSON
+        icon_data = self.master._extract_icon_data(gx_path / 'genexus.exe')
+        if icon_data:
+            self.result['icon_data'] = icon_data
+            
+        self.destroy()
+
+
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.app_icon = None
+        self._setup_window_icon()
+        self.title(APP_TITLE)
+        self.geometry('1040x650')
+        self.minsize(920, 560)
+
+        self.store = InstallationStore(CONFIG_FILE)
+        self.log_queue = queue.Queue()
+        self.running = False
+        self.current_process = None
+        self.installation_icons = {}
+        self.fallback_icon = self._create_fallback_icon()
+        self._load_button_icons()
+
+        self._build_ui()
+        self._load_installations()
+        self.update_idletasks()
+        center_window(self)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.after(150, self._drain_log_queue)
+
+    def _setup_window_icon(self):
+        try:
+            if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+                base_path = Path(sys._MEIPASS)
+            else:
+                base_path = Path(__file__).parent
+                
+            icon_path = base_path / "AppIcon.png"
+            if icon_path.exists():
+                self.app_icon = tk.PhotoImage(file=str(icon_path))
+                self.iconphoto(True, self.app_icon)
+            else:
+                self.log_queue.put(f'Aviso: ícone da janela não encontrado em {icon_path}')
+        except Exception as exc:
+            self.log_queue.put(f'Aviso: não foi possível carregar o ícone da janela: {exc}')
+
+    def _load_button_icons(self):
+        self.btn_icons = {}
+        if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+            base_path = Path(sys._MEIPASS)
+        else:
+            base_path = Path(__file__).parent
+            
+        icon_files = {
+            'plus': 'plus.png',
+            'delete': 'delete.png'
+        }
+        for key, filename in icon_files.items():
+            try:
+                path = base_path / filename
+                if path.exists():
+                    self.btn_icons[key] = tk.PhotoImage(file=str(path))
+            except Exception:
+                pass
+
+
+    def _get_version(self):
+        try:
+            if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+                base_path = Path(sys._MEIPASS)
+            else:
+                base_path = Path(__file__).parent
+
+            version_file = base_path / "version.config"
+            if version_file.exists():
+                return version_file.read_text().strip()
+        except Exception:
+            pass
+        return "1.00"
+
+    def on_closing(self):
+        self.running = False
+        if hasattr(self, 'current_process') and self.current_process:
+            try:
+                self.current_process.terminate()
+            except Exception:
+                pass
+        self.destroy()
+
+    def _build_ui(self):
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+        root = ttk.Frame(self, padding=12)
+        root.grid(sticky='nsew')
+        root.columnconfigure(0, weight=0)
+        root.columnconfigure(1, weight=1)
+        root.rowconfigure(0, weight=1)
+
+        style = ttk.Style()
+        style.configure("Treeview", font=('', 11), rowheight=38)
+        style.configure("Treeview.Heading", font=('', 11, 'bold'))
+
+        left = ttk.LabelFrame(root, text='Instalações', padding=10)
+        left.grid(row=0, column=0, sticky='nsw', padx=(0, 10))
+        left.rowconfigure(0, weight=1)
+        left.columnconfigure(0, weight=1)
+
+        self.tree = ttk.Treeview(left, show='tree', height=24)
+        self.tree.column('#0', width=300)
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        self.tree.bind('<<TreeviewSelect>>', self.on_select)
+
+        tree_scroll = ttk.Scrollbar(left, command=self.tree.yview)
+        tree_scroll.grid(row=0, column=1, sticky='ns')
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+
+        left_buttons = ttk.Frame(left)
+        left_buttons.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(10, 0))
+        left_buttons.columnconfigure(0, weight=1)
+        left_buttons.columnconfigure(1, weight=1)
+
+        self.move_up_btn = ttk.Button(left_buttons, text='▲ Mover p/ Cima', command=self.move_up_installation)
+        self.move_up_btn.grid(row=0, column=0, sticky='ew', padx=(0, 2))
+        self.move_down_btn = ttk.Button(left_buttons, text='▼ Mover p/ Baixo', command=self.move_down_installation)
+        self.move_down_btn.grid(row=0, column=1, sticky='ew', padx=(2, 0))
+
+        ttk.Button(left_buttons, text=' Nova Instalação', command=self.add_installation,
+                   image=self.btn_icons.get('plus'), compound='left').grid(row=1, column=0, columnspan=2, sticky='ew', pady=(8, 0))
+        self.edit_btn = ttk.Button(left_buttons, text='✎ Editar', command=self.edit_installation)
+        self.edit_btn.grid(row=2, column=0, columnspan=2, sticky='ew', pady=6)
+        self.remove_btn = ttk.Button(left_buttons, text=' Remover', command=self.remove_installation,
+                                     image=self.btn_icons.get('delete'), compound='left')
+        self.remove_btn.grid(row=3, column=0, columnspan=2, sticky='ew')
+
+
+        right = ttk.Frame(root)
+        right.grid(row=0, column=1, sticky='nsew')
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
+
+        details = ttk.LabelFrame(right, text='Detalhes e ações', padding=12)
+        details.grid(row=0, column=0, sticky='ew')
+        details.columnconfigure(1, weight=1)
+
+        self.name_value = tk.StringVar(value='-')
+        self.path_value = tk.StringVar(value='-')
+        self.exe_value = tk.StringVar(value='-')
+        self.com_value = tk.StringVar(value='-')
+        self.lmgr_path_value = tk.StringVar(value='-')
+
+        ttk.Label(details, text='Nome:').grid(row=0, column=0, sticky='w', pady=2)
+        ttk.Label(details, textvariable=self.name_value).grid(row=0, column=1, sticky='w', pady=2)
+        ttk.Label(details, text='Pasta:').grid(row=1, column=0, sticky='nw', pady=2)
+        ttk.Label(details, textvariable=self.path_value, wraplength=640).grid(row=1, column=1, sticky='w', pady=2)
+        ttk.Label(details, text='genexus.exe:').grid(row=2, column=0, sticky='w', pady=2)
+        ttk.Label(details, textvariable=self.exe_value, wraplength=640).grid(row=2, column=1, sticky='w', pady=2)
+        ttk.Label(details, text='genexus.com:').grid(row=3, column=0, sticky='w', pady=2)
+        ttk.Label(details, textvariable=self.com_value, wraplength=640).grid(row=3, column=1, sticky='w', pady=2)
+        ttk.Label(details, text='GxLMgr.exe:').grid(row=4, column=0, sticky='w', pady=2)
+        ttk.Label(details, textvariable=self.lmgr_path_value, wraplength=640).grid(row=4, column=1, sticky='w', pady=2)
+
+        actions = ttk.Frame(details)
+        actions.grid(row=5, column=0, columnspan=2, sticky='w', pady=(12, 0))
+        self.clean_open_btn = ttk.Button(actions, text='Limpar e iniciar GeneXus', command=self.prepare_and_open_selected)
+        self.clean_open_btn.grid(row=0, column=0, padx=(0, 8))
+        self.open_btn = ttk.Button(actions, text='Só iniciar GeneXus', command=self.open_selected)
+        self.open_btn.grid(row=0, column=1)
+        self.lmgr_btn = ttk.Button(actions, text='License Manager', command=self.open_license_manager)
+        self.lmgr_btn.grid(row=0, column=2, padx=(8, 0))
+        self.check_btn = ttk.Button(actions, text='Validar Instância', command=self.check_selected_instance)
+        self.check_btn.grid(row=0, column=3, padx=(8, 0))
+
+        log_frame = ttk.LabelFrame(right, text='Log', padding=10)
+        log_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+
+        self.log_text = tk.Text(log_frame, wrap='word', height=18, state='disabled')
+        self.log_text.grid(row=0, column=0, sticky='nsew')
+        scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
+        scrollbar.grid(row=0, column=1, sticky='ns')
+        self.log_text.config(yscrollcommand=scrollbar.set)
+
+        footer = ttk.Label(root, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), foreground='gray')
+        footer.grid(row=1, column=0, columnspan=2, sticky='e', pady=(6, 0))
+
+        self._set_buttons_state('disabled')
+
+    def _create_fallback_icon(self):
+        img = tk.PhotoImage(width=24, height=24)
+        img.put('#0b5cab', to=(0, 0, 23, 23))
+        img.put('#ffffff', to=(4, 4, 19, 19))
+        img.put('#0b5cab', to=(8, 8, 15, 15))
+        return img
+
+    def _icon_for_item(self, item):
+        key = item['path']
+        if key in self.installation_icons:
+            return self.installation_icons[key]
+        
+        if 'icon_data' in item:
+            try:
+                img = tk.PhotoImage(width=32, height=32)
+                for y, row_colors in enumerate(item['icon_data']):
+                    # row_colors é uma lista de cores (ex: ["#ffffff", null, "#000000"])
+                    for x, color in enumerate(row_colors):
+                        if color:
+                            # Preenche o pixel se não for transparente (null)
+                            img.put(color, to=(x, y))
+                self.installation_icons[key] = img
+                return img
+            except Exception:
+                pass
+
+        # Fallback se não houver dados ou falhar
+        exe_path = Path(item['path']) / 'genexus.exe'
+        if exe_path.exists():
+            icon_data = self._extract_icon_data(exe_path)
+            if icon_data:
+                img = tk.PhotoImage(width=32, height=32)
+                for y, row_data in enumerate(icon_data):
+                    img.put(row_data, to=(0, y))
+                self.installation_icons[key] = img
+                return img
+
+        return self.fallback_icon
+
+    def _extract_icon_data(self, exe_path):
+        """Extrai os dados de cor do ícone como uma lista de strings (uma por linha)"""
+        try:
+            if os.name != 'nt':
+                return None
+            import ctypes
+            from ctypes import wintypes
+
+            SHGFI_ICON = 0x100
+            BI_RGB = 0
+            DIB_RGB_COLORS = 0
+
+            class SHFILEINFO(ctypes.Structure):
+                _fields_ = [
+                    ('hIcon', wintypes.HANDLE),
+                    ('iIcon', ctypes.c_int),
+                    ('dwAttributes', wintypes.DWORD),
+                    ('szDisplayName', wintypes.WCHAR * 260),
+                    ('szTypeName', wintypes.WCHAR * 80),
+                ]
+
+            class ICONINFO(ctypes.Structure):
+                _fields_ = [
+                    ('fIcon', wintypes.BOOL),
+                    ('xHotspot', wintypes.DWORD),
+                    ('yHotspot', wintypes.DWORD),
+                    ('hbmMask', wintypes.HBITMAP),
+                    ('hbmColor', wintypes.HBITMAP),
+                ]
+
+            class BITMAP(ctypes.Structure):
+                _fields_ = [
+                    ('bmType', ctypes.c_long),
+                    ('bmWidth', ctypes.c_long),
+                    ('bmHeight', ctypes.c_long),
+                    ('bmWidthBytes', ctypes.c_long),
+                    ('bmPlanes', ctypes.c_ushort),
+                    ('bmBitsPixel', ctypes.c_ushort),
+                    ('bmBits', ctypes.c_void_p),
+                ]
+
+            class BITMAPINFOHEADER(ctypes.Structure):
+                _fields_ = [
+                    ('biSize', wintypes.DWORD),
+                    ('biWidth', ctypes.c_long),
+                    ('biHeight', ctypes.c_long),
+                    ('biPlanes', ctypes.c_ushort),
+                    ('biBitCount', ctypes.c_ushort),
+                    ('biCompression', wintypes.DWORD),
+                    ('biSizeImage', wintypes.DWORD),
+                    ('biXPelsPerMeter', ctypes.c_long),
+                    ('biYPelsPerMeter', ctypes.c_long),
+                    ('biClrUsed', wintypes.DWORD),
+                    ('biClrImportant', wintypes.DWORD),
+                ]
+
+            class BITMAPINFO(ctypes.Structure):
+                _fields_ = [('bmiHeader', BITMAPINFOHEADER), ('bmiColors', wintypes.DWORD * 3)]
+
+            shell32 = ctypes.windll.shell32
+            user32 = ctypes.windll.user32
+            gdi32 = ctypes.windll.gdi32
+
+            shinfo = SHFILEINFO()
+            res = shell32.SHGetFileInfoW(str(exe_path), 0, ctypes.byref(shinfo), ctypes.sizeof(shinfo), SHGFI_ICON)
+            if not res or not shinfo.hIcon:
+                return None
+
+            hicon = shinfo.hIcon
+            iconinfo = ICONINFO()
+            
+            hdc = None
+            memdc = None
+            rows = []
+            try:
+                if not user32.GetIconInfo(hicon, ctypes.byref(iconinfo)):
+                    return None
+
+                bmp = BITMAP()
+                gdi32.GetObjectW(iconinfo.hbmColor, ctypes.sizeof(bmp), ctypes.byref(bmp))
+                width, height = int(bmp.bmWidth), int(bmp.bmHeight)
+                if width <= 0 or height <= 0:
+                    width, height = 32, 32
+
+                header = BITMAPINFOHEADER()
+                header.biSize = ctypes.sizeof(BITMAPINFOHEADER)
+                header.biWidth = width
+                header.biHeight = -height
+                header.biPlanes = 1
+                header.biBitCount = 32
+                header.biCompression = BI_RGB
+
+                bmi = BITMAPINFO()
+                bmi.bmiHeader = header
+
+                hdc = user32.GetDC(None)
+                memdc = gdi32.CreateCompatibleDC(hdc)
+                bits = (ctypes.c_ubyte * (width * height * 4))()
+                copied = gdi32.GetDIBits(memdc, iconinfo.hbmColor, 0, height, ctypes.byref(bits), ctypes.byref(bmi), DIB_RGB_COLORS)
+
+                if copied:
+                    for y in range(height):
+                        row = []
+                        for x in range(width):
+                            i = (y * width + x) * 4
+                            b, g, r, a = bits[i], bits[i + 1], bits[i + 2], bits[i + 3]
+                            if a == 0:
+                                row.append(None)
+                            else:
+                                row.append(f'#{r:02x}{g:02x}{b:02x}')
+                        rows.append(row)
+                    return rows
+                return None
+            finally:
+                if memdc:
+                    gdi32.DeleteDC(memdc)
+                if hdc:
+                    user32.ReleaseDC(None, hdc)
+                if iconinfo.hbmColor:
+                    gdi32.DeleteObject(iconinfo.hbmColor)
+                if iconinfo.hbmMask:
+                    gdi32.DeleteObject(iconinfo.hbmMask)
+                if hicon:
+                    user32.DestroyIcon(hicon)
+        except Exception:
+            return None
+
+    def _load_installations(self):
+        for node in self.tree.get_children():
+            self.tree.delete(node)
+        
+        items = self.store.get_all()
+        needs_save = False
+        last_hash = self.store.get_last_selected_hash()
+        target_iid = None
+        
+        for idx, item in enumerate(items):
+            # Migração: se não tem hash, gera e salva
+            if 'hash' not in item:
+                item['hash'] = self.store._generate_hash(item['name'], item['path'])
+                needs_save = True
+
+            # Migração: se não tem icon_data, tenta extrair e salvar
+            if 'icon_data' not in item:
+                exe_path = Path(item['path']) / 'genexus.exe'
+                if exe_path.exists():
+                    data = self._extract_icon_data(exe_path)
+                    if data:
+                        item['icon_data'] = data
+                        needs_save = True
+            
+            iid = str(idx)
+            self.tree.insert('', 'end', iid=iid, text=item['name'], image=self._icon_for_item(item))
+            
+            if last_hash and item.get('hash') == last_hash:
+                target_iid = iid
+        
+        if needs_save:
+            self.store.save()
+            
+        all_items = self.tree.get_children()
+        if all_items:
+            # Seleciona o alvo do hash, ou o primeiro se não encontrado
+            selection = target_iid if target_iid and target_iid in all_items else all_items[0]
+            self.tree.selection_set(selection)
+            self.on_select()
+        else:
+            self.on_select()
+
+    def _set_buttons_state(self, state):
+        self.clean_open_btn.config(state=state)
+        self.open_btn.config(state=state)
+        self.lmgr_btn.config(state=state)
+        self.check_btn.config(state=state)
+        self.edit_btn.config(state=state)
+        self.remove_btn.config(state=state)
+        self.move_up_btn.config(state=state)
+        self.move_down_btn.config(state=state)
+
+    def _selected_index(self):
+        selection = self.tree.selection()
+        if not selection:
+            return None
+        return int(selection[0])
+
+    def _selected_item(self):
+        idx = self._selected_index()
+        if idx is None:
+            return None, None
+        items = self.store.get_all()
+        if idx < 0 or idx >= len(items):
+            return None, None
+        return idx, items[idx]
+
+    def on_select(self, event=None):
+        idx, item = self._selected_item()
+        if not item:
+            self.name_value.set('')
+            self.path_value.set('')
+            self.exe_value.set('')
+            self.com_value.set('')
+            self.lmgr_path_value.set('')
+            self._set_buttons_state('disabled')
+            return
+
+        gx_path = Path(item['path'])
+        self.name_value.set(item['name'])
+        self.path_value.set(str(gx_path))
+        self.exe_value.set(str(gx_path / 'genexus.exe'))
+        self.com_value.set(str(gx_path / 'genexus.com'))
+        self.lmgr_path_value.set(str(gx_path / 'GxLMgr.exe'))
+        self._set_buttons_state('normal' if not self.running else 'disabled')
+        
+        # Ajuste fino dos botões de movimento
+        if not self.running:
+            self.move_up_btn.config(state='normal' if idx > 0 else 'disabled')
+            self.move_down_btn.config(state='normal' if idx < len(self.tree.get_children()) - 1 else 'disabled')
+
+    def add_installation(self):
+        dialog = InstallationDialog(self)
+        self.wait_window(dialog)
+        if dialog.result:
+            self.store.add(dialog.result)
+            self.installation_icons.pop(dialog.result['path'], None)
+            self._load_installations()
+            items = self.tree.get_children()
+            if items:
+                self.tree.selection_set(items[-1])
+                self.on_select()
+            self.log(f'Instalação "{dialog.result["name"]}" cadastrada.')
+
+    def edit_installation(self):
+        idx, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        old_path = item['path']
+        dialog = InstallationDialog(self, initial=item, edit_index=idx)
+        self.wait_window(dialog)
+        if dialog.result:
+            self.store.update(idx, dialog.result)
+            self.installation_icons.pop(old_path, None)
+            self.installation_icons.pop(dialog.result['path'], None)
+            self._load_installations()
+            self.tree.selection_set(str(idx))
+            self.on_select()
+            self.log(f'Instalação "{dialog.result["name"]}" atualizada.')
+
+    def remove_installation(self):
+        idx, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        if messagebox.askyesno(APP_TITLE, f'Remover a instalação "{item["name"]}"?'):
+            self.installation_icons.pop(item['path'], None)
+            self.store.delete(idx)
+            self._load_installations()
+            self.log('Instalação removida.')
+
+    def move_up_installation(self):
+        idx = self._selected_index()
+        if idx is not None and idx > 0:
+            if self.store.move(idx, -1):
+                self._load_installations()
+                self.tree.selection_set(str(idx - 1))
+                self.on_select()
+
+    def move_down_installation(self):
+        idx = self._selected_index()
+        if idx is not None and idx < len(self.tree.get_children()) - 1:
+            if self.store.move(idx, 1):
+                self._load_installations()
+                self.tree.selection_set(str(idx + 1))
+                self.on_select()
+
+    def open_selected(self):
+        _, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        
+        self.log(f"--- Iniciando GeneXus: {item['name']} ---")
+        
+        # Validação de segurança: não permite abrir versões diferentes simultaneamente
+        running_paths = self._get_running_genexus_paths()
+        if running_paths:
+            target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
+            for p in running_paths:
+                if p != target_path:
+                    messagebox.showerror(APP_TITLE,
+                        "Conflito de Versões!\n\n"
+                        "Já existe uma instância de uma VERSÃO DIFERENTE do GeneXus rodando.\n"
+                        "Feche a versão atual e inicie pelo botão de Limpar e Iniciar Genexus.")
+                    return
+
+        try:
+            self._open_genexus(item)
+            self.store.set_last_selected_hash(item.get('hash'))
+            self.log(f'Aberto: {item["name"]}')
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            self.log(f'Erro ao abrir GeneXus: {exc}')
+
+    def check_selected_instance(self):
+        _, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+
+        self.log(f"--- Validando Instância: {item['name']} ---")
+        target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
+        self.log(f"Caminho esperado: {target_path}")
+        
+        running_paths = self._get_running_genexus_paths()
+        if not running_paths:
+            self.log("Nenhuma instância de GeneXus detectada rodando.")
+            messagebox.showinfo(APP_TITLE, "Nenhuma instância do GeneXus está rodando no momento.")
+            return
+
+        conflicts = []
+        for p in running_paths:
+            if p != target_path:
+                conflicts.append(p)
+        
+        if conflicts:
+            self.log(f"CONFLITO DETECTADO! Instâncias diferentes: {', '.join(conflicts)}")
+            messagebox.showerror(APP_TITLE, 
+                f"Conflito Detectado!\n\n"
+                f"Você selecionou: {item['name']}\n"
+                f"Mas existem instâncias de OUTRAS pastas rodando:\n\n" + "\n".join(conflicts))
+        else:
+            self.log("Instância validada. Apenas versões compatíveis estão rodando.")
+            messagebox.showinfo(APP_TITLE, "Tudo certo! As instâncias abertas pertencem à mesma pasta desta instalação.")
+
+    def open_license_manager(self):
+        _, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        try:
+            gx_path = Path(item['path'])
+            gxlmgr_exe = gx_path / 'GxLMgr.exe'
+            if not gxlmgr_exe.exists():
+                raise FileNotFoundError(f'Arquivo não encontrado: {gxlmgr_exe}')
+            
+            env = os.environ.copy()
+            if "_MEIPASS" in env:
+                del env["_MEIPASS"]
+                
+            subprocess.Popen([str(gxlmgr_exe)], cwd=str(gx_path), shell=False, env=env)
+            self.log(f'Aberto: License Manager ({item["name"]})')
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            self.log(f'Erro ao abrir License Manager: {exc}')
+
+    def prepare_and_open_selected(self):
+        _, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        if self.running:
+            return
+
+        self.log(f"--- Limpando e Iniciando: {item['name']} ---")
+            
+        # Validação de segurança: não permite limpar se houver qualquer GeneXus aberto
+        running_paths = self._get_running_genexus_paths()
+        if running_paths:
+            messagebox.showwarning(APP_TITLE, 
+                "Ação Bloqueada!\n\n"
+                "Já existe uma instância do GeneXus em execução.\n"
+                "Para evitar danos à instância atual, a funcionalidade de limpeza não será executada.")
+            return
+
+        self.running = True
+        self._set_buttons_state('disabled')
+        thread = threading.Thread(target=self._prepare_worker, args=(item,), daemon=True)
+        thread.start()
+
+    def _prepare_worker(self, item):
+        try:
+            gx_path = Path(item['path'])
+            genexus_com = gx_path / 'genexus.com'
+            if not genexus_com.exists():
+                raise FileNotFoundError(f'Arquivo não encontrado: {genexus_com}')
+
+            self.log('---------------------')
+            self.log(f'Preparando instalação: {item["name"]}')
+            self.log('---------------------')
+            self.log(f'Excluindo pasta {GXMODULES_PATH}')
+            shutil.rmtree(GXMODULES_PATH, ignore_errors=True)
+
+            self.log('')
+            self.log('---------------------')
+            self.log('Genexus Install...')
+            self.log('---------------------')
+            self.log('')
+
+            command = [str(genexus_com), '/install']
+            self._stream_process(command, cwd=str(gx_path))
+
+            self.log('')
+            self.log('---------------------')
+            self.log('Running Genexus')
+            self.log('---------------------')
+            self.log('')
+            self._open_genexus(item)
+            self.store.set_last_selected_hash(item.get('hash'))
+            self.log('GeneXus iniciado com sucesso.')
+        except Exception as exc:
+            self.log(f'ERRO: {exc}')
+            self.after(0, lambda: messagebox.showerror(APP_TITLE, str(exc)))
+        finally:
+            self.running = False
+            self.after(0, self.on_select)
+
+    def _open_genexus(self, item):
+        gx_path = Path(item['path'])
+        genexus_exe = gx_path / 'genexus.exe'
+        if not genexus_exe.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {genexus_exe}')
+        args = item.get('open_args') or DEFAULT_OPEN_ARGS
+        
+        env = os.environ.copy()
+        if "_MEIPASS" in env:
+            del env["_MEIPASS"]
+            
+        subprocess.Popen([str(genexus_exe), *args], cwd=str(gx_path), shell=False, env=env)
+
+    def _stream_process(self, command, cwd=None):
+        kwargs = {
+            "cwd": cwd,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+            "universal_newlines": True,
+            "shell": False,
+        }
+
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+        env = os.environ.copy()
+        if "_MEIPASS" in env:
+            del env["_MEIPASS"]
+        kwargs["env"] = env
+
+        self.current_process = subprocess.Popen(command, **kwargs)
+        process = self.current_process
+
+        assert process.stdout is not None
+        for line in process.stdout:
+            self.log(line.rstrip())
+
+        code = process.wait()
+        if code != 0:
+            raise RuntimeError(f'Comando falhou com código {code}: {" ".join(command)}')
+
+    def _get_running_genexus_paths(self):
+        """Retorna uma lista de pastas únicas onde o genexus.exe está rodando no momento"""
+        try:
+            # Usa PowerShell que é mais confiável e insensível a maiúsculas/minúsculas
+            cmd = 'powershell -NoProfile -Command "Get-Process GeneXus -ErrorAction SilentlyContinue | Where-Object { $_.Path -ne $null } | ForEach-Object { $_.Path }"'
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            output = subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL, startupinfo=startupinfo)
+            paths = []
+            for line in output.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    # Normalização rigorosa do caminho
+                    full_path = os.path.realpath(os.path.normpath(line))
+                    folder = os.path.dirname(full_path).lower()
+                    paths.append(folder)
+                except Exception:
+                    continue
+            
+            detected = list(set(paths))
+            if detected:
+                # Log silencioso ou informativo sobre o que foi encontrado
+                self.log(f"[Info] Instâncias ativas detectadas em: {', '.join(detected)}")
+            return detected
+        except Exception as e:
+            self.log(f"[Erro] Falha ao verificar processos: {e}")
+            return []
+
+    def log(self, message):
+        self.log_queue.put(message)
+
+    def _drain_log_queue(self):
+        try:
+            while True:
+                message = self.log_queue.get_nowait()
+                self.log_text.config(state='normal')
+                self.log_text.insert(tk.END, message + '\n')
+                self.log_text.config(state='disabled')
+                self.log_text.see(tk.END)
+        except queue.Empty:
+            pass
+        finally:
+            self.after(150, self._drain_log_queue)
+
+
+if __name__ == '__main__':
+    app = App()
+    app.mainloop()
