@@ -2,7 +2,9 @@
 
 Uma ferramenta poderosa e intuitiva para desenvolvedores GeneXus gerenciarem múltiplas instalações e versões de forma organizada e eficiente.
 
-![GeneXus Launcher](https://raw.githubusercontent.com/google/material-design-icons/master/png/action/settings_applications/materialicons/48dp/2x/baseline_settings_applications_black_48dp.png)
+<p align="center">
+  <img src="AppIcon.png" alt="GeneXus Launcher" width="128">
+</p>
 
 ## ✨ Funcionalidades
 
