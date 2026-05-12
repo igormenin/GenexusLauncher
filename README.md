@@ -61,8 +61,9 @@ git push origin v1.XX
 
 ## 📝 Notas de Versão
 
+- **v1.26**: Correção nas dependências do CI/CD (Pillow) para suporte a ícones PNG e atualização do fluxo de build.
 - **v1.25**: Implementado sistema de atualização automática via GitHub e build automatizado com GitHub Actions. Adicionado modal de loading com fundo transparente.
-- **v1.24**: Adicionada persistência da última versão selecionada via Hash MD5 e validação de caminhos duplicados.
+
 
 - **v1.23**: Implementada reordenação de itens na lista e extração de ícones em tempo de execução.
 
