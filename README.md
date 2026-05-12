@@ -10,6 +10,7 @@ Uma ferramenta poderosa e intuitiva para desenvolvedores GeneXus gerenciarem mú
 > **Execução como Administrador**: Para garantir que o launcher consiga realizar as operações de limpeza, encerrar processos travados e evitar erros de carregamento de DLLs em pastas temporárias, o aplicativo **deve ser executado como Administrador**. 
 > O executável gerado já está configurado para solicitar esses privilégios automaticamente (utilizando a flag `--uac-admin` no PyInstaller).
 
+
 ## ✨ Funcionalidades
 
 - **Gerenciamento Multi-Instância**: Cadastre e organize todas as suas pastas do GeneXus em uma lista única.
