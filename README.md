@@ -58,12 +58,6 @@ O projeto utiliza **GitHub Actions** para automatizar o build e a distribuição
 3. **Release**: Um arquivo `last_version.zip` é gerado e anexado à Release do GitHub.
 4. **Distribuição**: O aplicativo local detecta a nova versão, baixa o pacote e se auto-atualiza automaticamente.
 
-Para lançar uma nova versão:
-```bash
-git tag v1.XX
-git push origin v1.XX
-```
-
 
 ## 📝 Notas de Versão
 
