@@ -204,7 +204,74 @@ class InstallationDialog(tk.Toplevel):
         self.destroy()
 
 
+
+class LoadingOverlay(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.withdraw()
+        self.overrideredirect(True)
+        self.attributes('-alpha', 0.6)
+        self.configure(bg='black')
+        self.transient(master)
+        
+        self.message_var = tk.StringVar(value="Processando...")
+        
+        # Central container
+        container = tk.Frame(self, bg='black')
+        container.place(relx=0.5, rely=0.5, anchor='center')
+        
+        # Spinner Canvas
+        self.canvas = tk.Canvas(container, width=50, height=50, bg='black', highlightthickness=0)
+        self.canvas.pack(pady=10)
+        self.arc = self.canvas.create_arc(5, 5, 45, 45, start=0, extent=120, outline='#0b5cab', width=4, style='arc')
+        
+        # Message Label
+        tk.Label(container, textvariable=self.message_var, fg='white', bg='black', font=('', 12, 'bold')).pack()
+        
+        self.angle = 0
+        self.running = False
+        
+        # Sincroniza posição com a janela principal
+        self.master.bind("<Configure>", self._reposition, add="+")
+
+    def _reposition(self, event=None):
+        if self.winfo_exists() and self.master.winfo_exists():
+            x = self.master.winfo_rootx()
+            y = self.master.winfo_rooty()
+            w = self.master.winfo_width()
+            h = self.master.winfo_height()
+            self.geometry(f"{w}x{h}+{x}+{y}")
+
+    def start_animation(self):
+        if not self.running:
+            self.running = True
+            self._animate()
+
+    def stop_animation(self):
+        self.running = False
+
+    def _animate(self):
+        if self.running:
+            self.angle = (self.angle + 10) % 360
+            self.canvas.itemconfig(self.arc, start=self.angle)
+            self.after(30, self._animate)
+
+    def show(self, message="Processando..."):
+        self.message_var.set(message)
+        self._reposition()
+        self.deiconify()
+        self.lift()
+        self.start_animation()
+        self.update()
+
+    def hide(self):
+        self.stop_animation()
+        self.withdraw()
+
+
+
 class App(tk.Tk):
+
     def __init__(self):
         super().__init__()
         self.app_icon = None
@@ -222,7 +289,9 @@ class App(tk.Tk):
         self._load_button_icons()
 
         self._build_ui()
+        self.loading = LoadingOverlay(self)
         self._load_installations()
+
         self.update_idletasks()
         center_window(self)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -386,6 +455,13 @@ class App(tk.Tk):
         footer.grid(row=1, column=0, columnspan=2, sticky='e', pady=(6, 0))
 
         self._set_buttons_state('disabled')
+
+    def show_loading(self, message="Processando..."):
+        self.loading.show(message)
+
+    def hide_loading(self):
+        self.loading.hide()
+
 
     def _create_fallback_icon(self):
         img = tk.PhotoImage(width=24, height=24)
@@ -707,27 +783,34 @@ class App(tk.Tk):
             messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
             return
         
-        self.log(f"--- Iniciando GeneXus: {item['name']} ---")
-        
-        # Validação de segurança: não permite abrir versões diferentes simultaneamente
-        running_paths = self._get_running_genexus_paths()
-        if running_paths:
-            target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
-            for p in running_paths:
-                if p != target_path:
-                    messagebox.showerror(APP_TITLE,
-                        "Conflito de Versões!\n\n"
-                        "Já existe uma instância de uma VERSÃO DIFERENTE do GeneXus rodando.\n"
-                        "Feche a versão atual e inicie pelo botão de Limpar e Iniciar Genexus.")
-                    return
+        self.show_loading("Iniciando GeneXus...")
+        thread = threading.Thread(target=self._open_selected_worker, args=(item,), daemon=True)
+        thread.start()
 
+    def _open_selected_worker(self, item):
         try:
+            self.log(f"--- Iniciando GeneXus: {item['name']} ---")
+            
+            # Validação de segurança: não permite abrir versões diferentes simultaneamente
+            running_paths = self._get_running_genexus_paths()
+            if running_paths:
+                target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
+                for p in running_paths:
+                    if p != target_path:
+                        self.after(0, lambda: messagebox.showerror(APP_TITLE,
+                            "Conflito de Versões!\n\n"
+                            "Já existe uma instância de uma VERSÃO DIFERENTE do GeneXus rodando.\n"
+                            "Feche a versão atual e inicie pelo botão de Limpar e Iniciar Genexus."))
+                        return
+
             self._open_genexus(item)
             self.store.set_last_selected_hash(item.get('hash'))
             self.log(f'Aberto: {item["name"]}')
         except Exception as exc:
-            messagebox.showerror(APP_TITLE, str(exc))
+            self.after(0, lambda: messagebox.showerror(APP_TITLE, str(exc)))
             self.log(f'Erro ao abrir GeneXus: {exc}')
+        finally:
+            self.after(0, self.hide_loading)
 
     def check_selected_instance(self):
         _, item = self._selected_item()
@@ -735,30 +818,39 @@ class App(tk.Tk):
             messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
             return
 
-        self.log(f"--- Validando Instância: {item['name']} ---")
-        target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
-        self.log(f"Caminho esperado: {target_path}")
-        
-        running_paths = self._get_running_genexus_paths()
-        if not running_paths:
-            self.log("Nenhuma instância de GeneXus detectada rodando.")
-            messagebox.showinfo(APP_TITLE, "Nenhuma instância do GeneXus está rodando no momento.")
-            return
+        self.show_loading("Validando Instância...")
+        thread = threading.Thread(target=self._check_selected_worker, args=(item,), daemon=True)
+        thread.start()
 
-        conflicts = []
-        for p in running_paths:
-            if p != target_path:
-                conflicts.append(p)
-        
-        if conflicts:
-            self.log(f"CONFLITO DETECTADO! Instâncias diferentes: {', '.join(conflicts)}")
-            messagebox.showerror(APP_TITLE, 
-                f"Conflito Detectado!\n\n"
-                f"Você selecionou: {item['name']}\n"
-                f"Mas existem instâncias de OUTRAS pastas rodando:\n\n" + "\n".join(conflicts))
-        else:
-            self.log("Instância validada. Apenas versões compatíveis estão rodando.")
-            messagebox.showinfo(APP_TITLE, "Tudo certo! As instâncias abertas pertencem à mesma pasta desta instalação.")
+    def _check_selected_worker(self, item):
+        try:
+            self.log(f"--- Validando Instância: {item['name']} ---")
+            target_path = os.path.realpath(os.path.normpath(item['path'])).lower()
+            self.log(f"Caminho esperado: {target_path}")
+            
+            running_paths = self._get_running_genexus_paths()
+            if not running_paths:
+                self.log("Nenhuma instância de GeneXus detectada rodando.")
+                self.after(0, lambda: messagebox.showinfo(APP_TITLE, "Nenhuma instância do GeneXus está rodando no momento."))
+                return
+
+            conflicts = []
+            for p in running_paths:
+                if p != target_path:
+                    conflicts.append(p)
+            
+            if conflicts:
+                self.log(f"CONFLITO DETECTADO! Instâncias diferentes: {', '.join(conflicts)}")
+                self.after(0, lambda: messagebox.showerror(APP_TITLE, 
+                    f"Conflito Detectado!\n\n"
+                    f"Você selecionou: {item['name']}\n"
+                    f"Mas existem instâncias de OUTRAS pastas rodando:\n\n" + "\n".join(conflicts)))
+            else:
+                self.log("Instância validada. Apenas versões compatíveis estão rodando.")
+                self.after(0, lambda: messagebox.showinfo(APP_TITLE, "Tudo certo! As instâncias abertas pertencem à mesma pasta desta instalação."))
+        finally:
+            self.after(0, self.hide_loading)
+
 
     def open_license_manager(self):
         _, item = self._selected_item()
@@ -802,8 +894,10 @@ class App(tk.Tk):
 
         self.running = True
         self._set_buttons_state('disabled')
+        self.show_loading("Limpando e Iniciando...")
         thread = threading.Thread(target=self._prepare_worker, args=(item,), daemon=True)
         thread.start()
+
 
     def _prepare_worker(self, item):
         try:
@@ -840,7 +934,9 @@ class App(tk.Tk):
             self.after(0, lambda: messagebox.showerror(APP_TITLE, str(exc)))
         finally:
             self.running = False
+            self.after(0, self.hide_loading)
             self.after(0, self.on_select)
+
 
     def _open_genexus(self, item):
         gx_path = Path(item['path'])
