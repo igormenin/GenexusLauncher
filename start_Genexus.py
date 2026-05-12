@@ -549,8 +549,9 @@ class App(tk.Tk):
                     if asset_url:
                         self.update_url = asset_url
                         self.after(0, lambda: UpdateDialog(self, remote_version, notes))
-        except Exception as e:
-            self.log(f"Aviso: Falha ao verificar atualizações: {e}")
+        except Exception:
+            pass
+
 
     def start_update_process(self):
         self.show_loading("Baixando atualização (0%)...")
