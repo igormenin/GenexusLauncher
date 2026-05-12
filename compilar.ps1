@@ -44,7 +44,8 @@ Remove-Item -Path ".\dist" -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`nCompilando com PyInstaller (isso pode levar alguns instantes)..." -ForegroundColor Cyan
 # Rodamos o PyInstaller
-& pyinstaller --onefile --windowed --name GeneXusLauncher --icon=AppIcon.png --add-data "AppIcon.png;." --add-data "version.config;." --add-data "plus.png;." --add-data "delete.png;." .\start_Genexus.py
+& pyinstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=AppIcon.png --add-data "AppIcon.png;." --add-data "version.config;." --add-data "plus.png;." --add-data "delete.png;." .\start_Genexus.py
+
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`nCopiando executável para a raiz..." -ForegroundColor Cyan

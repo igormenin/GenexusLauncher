@@ -5,6 +5,10 @@ Uma ferramenta poderosa e intuitiva para desenvolvedores GeneXus gerenciarem mú
 <p align="center">
   <img src="AppIcon.png" alt="GeneXus Launcher" width="128">
 </p>
+ 
+> [!IMPORTANT]
+> **Execução como Administrador**: Para garantir que o launcher consiga realizar as operações de limpeza, encerrar processos travados e evitar erros de carregamento de DLLs em pastas temporárias, o aplicativo **deve ser executado como Administrador**. 
+> O executável gerado já está configurado para solicitar esses privilégios automaticamente (utilizando a flag `--uac-admin` no PyInstaller).
 
 ## ✨ Funcionalidades
 
@@ -39,6 +43,7 @@ Se você estiver rodando a partir do código fonte:
 
 O projeto inclui um script de compilação em PowerShell (`compilar.ps1`) que utiliza o PyInstaller para gerar um executável único (`onefile`) com todos os recursos embutidos.
 
+O comando utilizado no script para compilação é:
 ```powershell
 ./compilar.ps1
 ```
