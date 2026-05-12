@@ -580,12 +580,15 @@ class App(tk.Tk):
             # Cria script batch para substituir e reiniciar
             # timeout /t 2 garante que este processo fechou
             bat_content = f"""@echo off
+set EXE_NAME={Path(exe_path).name}
 timeout /t 2 /nobreak > nul
+taskkill /f /im "%EXE_NAME%" > nul 2>&1
 powershell -Command "Expand-Archive -Path 'last_version.zip' -DestinationPath '.' -Force"
-del "last_version.zip"
-start "" "{Path(exe_path).name}"
+if exist "last_version.zip" del "last_version.zip"
+start "" "%EXE_NAME%"
 del "%~f0"
 """
+
             bat_path = Path("update_gx.bat")
             bat_path.write_text(bat_content, encoding='ansi')
             
