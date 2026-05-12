@@ -1,0 +1,62 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = $tag.TrimStart('vV')
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+          echo "$version" > version.config
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --onefile --windowed --name GeneXusLauncher `
+            --icon=AppIcon.png `
+            --add-data "AppIcon.png;." `
+            --add-data "version.config;." `
+            --add-data "plus.png;." `
+            --add-data "delete.png;." `
+            .\start_Genexus.py
+
+      - name: Prepare Assets
+        run: |
+          powershell -Command "Compress-Archive -Path 'dist\GeneXusLauncher.exe' -DestinationPath 'last_version.zip' -Force"
+          cp dist\GeneXusLauncher.exe GeneXusLauncher_v${{ env.VERSION }}.exe
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            last_version.zip
+            GeneXusLauncher_v${{ env.VERSION }}.exe
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

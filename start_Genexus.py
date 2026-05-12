@@ -6,9 +6,15 @@ import queue
 import shutil
 import subprocess
 import threading
+import urllib.request
+import zipfile
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+
+GITHUB_REPO = "igormenin/GenexusLauncher"
+
+
 
 APP_TITLE = 'GeneXus Launcher'
 # CORREÇÃO: Configuração que funciona com PyInstaller onefile
@@ -269,8 +275,57 @@ class LoadingOverlay(tk.Toplevel):
         self.withdraw()
 
 
+class UpdateDialog(tk.Toplevel):
+    def __init__(self, master, version, notes):
+        super().__init__(master)
+        self.withdraw()
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        self.configure(bg='#1e1e1e')
+        
+        w, h = 450, 320
+        # Tenta centralizar
+        try:
+            x = master.winfo_rootx() + (master.winfo_width() - w) // 2
+            y = master.winfo_rooty() + (master.winfo_height() - h) // 2
+        except Exception:
+            x = (self.winfo_screenwidth() - w) // 2
+            y = (self.winfo_screenheight() - h) // 2
+            
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+        container = tk.Frame(self, bg='#1e1e1e', padx=30, pady=30, highlightbackground="#0b5cab", highlightthickness=2)
+        container.pack(fill='both', expand=True)
+
+        tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg='#1e1e1e', font=('', 16, 'bold')).pack(pady=(0, 15))
+        tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg='white', bg='#1e1e1e', font=('', 11)).pack(pady=(0, 10))
+
+        notes_frame = tk.Frame(container, bg='#2d2d2d', padx=5, pady=5)
+        notes_frame.pack(fill='both', expand=True, pady=10)
+        
+        txt = tk.Text(notes_frame, height=5, bg='#2d2d2d', fg='#cccccc', font=('', 10), borderwidth=0, highlightthickness=0)
+        txt.insert('1.0', notes or "Melhorias e correções gerais.")
+        txt.config(state='disabled')
+        txt.pack(side='left', fill='both', expand=True)
+        
+        scroll = tk.Scrollbar(notes_frame, command=txt.yview)
+        scroll.pack(side='right', fill='y')
+        txt.config(yscrollcommand=scroll.set)
+
+        self.btn = tk.Button(container, text="INICIAR ATUALIZAÇÃO", bg="#0b5cab", fg="white", font=('', 11, 'bold'), 
+                             padx=20, pady=10, borderwidth=0, cursor="hand2", command=self.confirm)
+        self.btn.pack(pady=(15, 0))
+        
+        self.deiconify()
+        self.grab_set()
+
+    def confirm(self):
+        self.destroy()
+        self.master.start_update_process()
+
 
 class App(tk.Tk):
+
 
     def __init__(self):
         super().__init__()
@@ -296,6 +351,8 @@ class App(tk.Tk):
         center_window(self)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.after(150, self._drain_log_queue)
+        self.after(1000, self.check_for_updates)
+
 
     def _setup_window_icon(self):
         try:
@@ -462,8 +519,85 @@ class App(tk.Tk):
     def hide_loading(self):
         self.loading.hide()
 
+    def check_for_updates(self):
+        thread = threading.Thread(target=self._check_updates_worker, daemon=True)
+        thread.start()
+
+    def _check_updates_worker(self):
+        try:
+            current_version = self._get_version()
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            
+            req = urllib.request.Request(url)
+            # GitHub exige User-Agent
+            req.add_header('User-Agent', 'GXLauncher-Updater')
+            
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+                remote_version = data['tag_name'].strip('vV')
+                
+                # Comparação simples de versão
+                if remote_version != current_version:
+                    notes = data.get('body', '')
+                    # Encontra o asset last_version.zip
+                    asset_url = None
+                    for asset in data.get('assets', []):
+                        if asset['name'] == 'last_version.zip':
+                            asset_url = asset['browser_download_url']
+                            break
+                    
+                    if asset_url:
+                        self.update_url = asset_url
+                        self.after(0, lambda: UpdateDialog(self, remote_version, notes))
+        except Exception as e:
+            self.log(f"Aviso: Falha ao verificar atualizações: {e}")
+
+    def start_update_process(self):
+        self.show_loading("Baixando atualização (0%)...")
+        thread = threading.Thread(target=self._download_update_worker, daemon=True)
+        thread.start()
+
+    def _download_update_worker(self):
+        try:
+            target_path = Path("last_version.zip")
+            
+            def progress(count, block_size, total_size):
+                if total_size > 0:
+                    percent = int(count * block_size * 100 / total_size)
+                    self.after(0, lambda: self.loading.message_var.set(f"Baixando atualização ({percent}%)..."))
+
+            urllib.request.urlretrieve(self.update_url, str(target_path), reporthook=progress)
+            
+            self.after(0, lambda: self.loading.message_var.set("Finalizando..."))
+            self._apply_update()
+        except Exception as e:
+            self.after(0, self.hide_loading)
+            self.after(0, lambda: messagebox.showerror(APP_TITLE, f"Erro no download: {e}"))
+
+    def _apply_update(self):
+        try:
+            exe_path = sys.executable
+            # Cria script batch para substituir e reiniciar
+            # timeout /t 2 garante que este processo fechou
+            bat_content = f"""@echo off
+timeout /t 2 /nobreak > nul
+powershell -Command "Expand-Archive -Path 'last_version.zip' -DestinationPath '.' -Force"
+del "last_version.zip"
+start "" "{Path(exe_path).name}"
+del "%~f0"
+"""
+            bat_path = Path("update_gx.bat")
+            bat_path.write_text(bat_content, encoding='ansi')
+            
+            # Executa e fecha
+            subprocess.Popen([str(bat_path)], shell=True)
+            self.after(0, self.on_closing)
+        except Exception as e:
+            self.after(0, lambda: messagebox.showerror(APP_TITLE, f"Erro ao aplicar: {e}"))
+            self.after(0, self.hide_loading)
 
     def _create_fallback_icon(self):
+
         img = tk.PhotoImage(width=24, height=24)
         img.put('#0b5cab', to=(0, 0, 23, 23))
         img.put('#ffffff', to=(4, 4, 19, 19))
