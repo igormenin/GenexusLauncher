@@ -44,22 +44,16 @@ Remove-Item -Path ".\dist" -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`nCompilando com PyInstaller (isso pode levar alguns instantes)..." -ForegroundColor Cyan
 # Rodamos o PyInstaller
-& pyinstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=AppIcon.png --add-data "AppIcon.png;." --add-data "version.config;." --add-data "plus.png;." --add-data "delete.png;." .\start_Genexus.py
+& pyinstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." .\start_Genexus.py
+
 
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`nCopiando executável para a raiz..." -ForegroundColor Cyan
     Copy-Item -Path ".\dist\GeneXusLauncher.exe" -Destination ".\GeneXusLauncher.exe" -Force
 
-    Write-Host "`nLimpando pacotes ZIP antigos..." -ForegroundColor Cyan
-    Get-ChildItem -Filter "GenexusLauncher_*.zip" | Remove-Item -Force -ErrorAction SilentlyContinue
-
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $zipName = "GenexusLauncher_$timestamp.zip"
-    Write-Host "`nCriando pacote ZIP: $zipName" -ForegroundColor Cyan
-    Compress-Archive -Path "GeneXusLauncher.exe" -DestinationPath $zipName -Force
-
     Write-Host "`nProcesso concluído com sucesso!" -ForegroundColor Green
+
 } else {
     Write-Host "`nERRO: Falha durante a compilação do PyInstaller." -ForegroundColor Red
 }

@@ -35,7 +35,8 @@ jobs:
           echo "$version" > version.config
 
       - name: Build with PyInstaller
-        run: python -m PyInstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=AppIcon.png --add-data "AppIcon.png;." --add-data "version.config;." --add-data "plus.png;." --add-data "delete.png;." .\start_Genexus.py
+        run: python -m PyInstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." .\start_Genexus.py
+
 
       - name: Prepare Assets
         run: |

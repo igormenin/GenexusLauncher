@@ -3,8 +3,9 @@
 Uma ferramenta poderosa e intuitiva para desenvolvedores GeneXus gerenciarem múltiplas instalações e versões de forma organizada e eficiente.
 
 <p align="center">
-  <img src="AppIcon.png" alt="GeneXus Launcher" width="128">
+  <img src="images/AppIcon.png" alt="GeneXus Launcher" width="128">
 </p>
+
  
 > [!IMPORTANT]
 > **Execução como Administrador**: Para garantir que o launcher consiga realizar as operações de limpeza, encerrar processos travados e evitar erros de carregamento de DLLs em pastas temporárias, o aplicativo **deve ser executado como Administrador**. 
@@ -61,13 +62,13 @@ O projeto utiliza **GitHub Actions** para automatizar o build e a distribuição
 
 ## 📝 Notas de Versão
 
+- **v1.31**: Implementado sistema de **Auto-Scan** para busca automática de instalações, nova interface visual com ícones coloridos, botão de verificação manual no rodapé e melhorias críticas de estabilidade no processo de upgrade.
+
 - **v1.30**: Correção nas dependências do CI/CD (Pillow) para suporte a ícones PNG e atualização do fluxo de build.
-
 - **v1.29**: Implementado sistema de atualização automática via GitHub e build automatizado com GitHub Actions. Adicionado modal de loading com fundo transparente.
-
 - **v1.28**: Adicionada persistência da última versão selecionada via Hash MD5 e validação de caminhos duplicados.
-
 - **v1.27**: Implementada reordenação de itens na lista e extração de ícones em tempo de execução.
+
 
 ---
 Desenvolvido por **Igor Menin**

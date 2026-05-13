@@ -275,7 +275,75 @@ class LoadingOverlay(tk.Toplevel):
         self.withdraw()
 
 
+class DriveSelectionDialog(tk.Toplevel):
+    def __init__(self, master, drives):
+        super().__init__(master)
+        self.title("Selecionar Unidade")
+        self.resizable(False, False)
+        self.result = None
+        self.transient(master)
+        self.grab_set()
+
+        body = ttk.Frame(self, padding=20)
+        body.pack(fill='both', expand=True)
+
+        ttk.Label(body, text="Em qual unidade deseja procurar o GeneXus?", font=('', 11)).pack(pady=(0, 15))
+        
+        self.drive_var = tk.StringVar(value=drives[0])
+        combo = ttk.Combobox(body, textvariable=self.drive_var, values=drives, state='readonly', font=('', 11))
+        combo.pack(fill='x', pady=(0, 20))
+
+        btns = ttk.Frame(body)
+        btns.pack(fill='x')
+        ttk.Button(btns, text="Cancelar", command=self.destroy).pack(side='right')
+        ttk.Button(btns, text="Iniciar Busca", command=self.confirm).pack(side='right', padx=(0, 10))
+
+        center_window(self, master)
+
+    def confirm(self):
+        self.result = self.drive_var.get()
+        self.destroy()
+
+
+class NamingDialog(tk.Toplevel):
+    def __init__(self, master, path):
+        super().__init__(master)
+        self.title("Nomear Instalação")
+        self.resizable(False, False)
+        self.result = None
+        self.transient(master)
+        self.grab_set()
+
+        body = ttk.Frame(self, padding=20)
+        body.pack(fill='both', expand=True)
+
+        ttk.Label(body, text="Instalação encontrada em:", font=('', 10, 'bold')).pack(anchor='w')
+        lbl_path = ttk.Label(body, text=str(path), font=('', 9), foreground='gray', wraplength=400)
+        lbl_path.pack(anchor='w', pady=(2, 15))
+
+        ttk.Label(body, text="Nome para esta instalação:", font=('', 11)).pack(anchor='w')
+        self.name_var = tk.StringVar(value=path.name)
+        self.entry = ttk.Entry(body, textvariable=self.name_var, font=('', 11), width=45)
+        self.entry.pack(fill='x', pady=(5, 20))
+        self.entry.select_range(0, tk.END)
+        self.entry.focus_set()
+
+        btns = ttk.Frame(body)
+        btns.pack(fill='x')
+        ttk.Button(btns, text="Pular", command=self.destroy).pack(side='right')
+        ttk.Button(btns, text="Adicionar", command=self.confirm).pack(side='right', padx=(0, 10))
+
+        center_window(self, master)
+
+    def confirm(self):
+        name = self.name_var.get().strip()
+        if name:
+            self.result = name
+            self.destroy()
+
+
 class UpdateDialog(tk.Toplevel):
+
     def __init__(self, master, version, notes):
         super().__init__(master)
         self.withdraw()
@@ -361,7 +429,7 @@ class App(tk.Tk):
             else:
                 base_path = Path(__file__).parent
                 
-            icon_path = base_path / "AppIcon.png"
+            icon_path = base_path / "images" / "AppIcon.png"
             if icon_path.exists():
                 self.app_icon = tk.PhotoImage(file=str(icon_path))
                 self.iconphoto(True, self.app_icon)
@@ -379,13 +447,22 @@ class App(tk.Tk):
             
         icon_files = {
             'plus': 'plus.png',
-            'delete': 'delete.png'
+            'delete': 'delete.png',
+            'search': 'search.png',
+            'up': 'up-arrow.png',
+            'down': 'down-arrow.png',
+            'update': 'cloud-download.png',
+            'edit': 'edit.png'
         }
+
+
+
         for key, filename in icon_files.items():
             try:
-                path = base_path / filename
+                path = base_path / "images" / filename
                 if path.exists():
                     self.btn_icons[key] = tk.PhotoImage(file=str(path))
+
             except Exception:
                 pass
 
@@ -446,14 +523,25 @@ class App(tk.Tk):
         left_buttons.columnconfigure(0, weight=1)
         left_buttons.columnconfigure(1, weight=1)
 
-        self.move_up_btn = ttk.Button(left_buttons, text='▲ Mover p/ Cima', command=self.move_up_installation)
+        self.move_up_btn = ttk.Button(left_buttons, text=' Mover p/ Cima', command=self.move_up_installation,
+                                      image=self.btn_icons.get('up'), compound='left')
+
         self.move_up_btn.grid(row=0, column=0, sticky='ew', padx=(0, 2))
-        self.move_down_btn = ttk.Button(left_buttons, text='▼ Mover p/ Baixo', command=self.move_down_installation)
+        self.move_down_btn = ttk.Button(left_buttons, text=' Mover p/ Baixo', command=self.move_down_installation,
+                                        image=self.btn_icons.get('down'), compound='left')
+
+
         self.move_down_btn.grid(row=0, column=1, sticky='ew', padx=(2, 0))
 
-        ttk.Button(left_buttons, text=' Nova Instalação', command=self.add_installation,
-                   image=self.btn_icons.get('plus'), compound='left').grid(row=1, column=0, columnspan=2, sticky='ew', pady=(8, 0))
-        self.edit_btn = ttk.Button(left_buttons, text='✎ Editar', command=self.edit_installation)
+        ttk.Button(left_buttons, text=' Nova', command=self.add_installation,
+                   image=self.btn_icons.get('plus'), compound='left').grid(row=1, column=0, sticky='ew', pady=(8, 0), padx=(0, 2))
+        ttk.Button(left_buttons, text=' Buscar Instalações', command=self.start_auto_scan,
+                   image=self.btn_icons.get('search'), compound='left').grid(row=1, column=1, sticky='ew', pady=(8, 0), padx=(2, 0))
+
+
+        self.edit_btn = ttk.Button(left_buttons, text=' Editar', command=self.edit_installation,
+                                   image=self.btn_icons.get('edit'), compound='left')
+
         self.edit_btn.grid(row=2, column=0, columnspan=2, sticky='ew', pady=6)
         self.remove_btn = ttk.Button(left_buttons, text=' Remover', command=self.remove_installation,
                                      image=self.btn_icons.get('delete'), compound='left')
@@ -508,8 +596,22 @@ class App(tk.Tk):
         scrollbar.grid(row=0, column=1, sticky='ns')
         self.log_text.config(yscrollcommand=scrollbar.set)
 
-        footer = ttk.Label(root, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), foreground='gray')
-        footer.grid(row=1, column=0, columnspan=2, sticky='e', pady=(6, 0))
+        footer_frame = ttk.Frame(root)
+        footer_frame.grid(row=1, column=0, columnspan=2, sticky='e', pady=(6, 0))
+
+        footer = ttk.Label(footer_frame, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), foreground='gray')
+        footer.pack(side='left', padx=(0, 10))
+
+        self.manual_update_btn = ttk.Button(footer_frame, text="Verificar Atualização", 
+                                            command=lambda: self.check_for_updates(manual=True), 
+                                            style='Small.TButton', image=self.btn_icons.get('update'), compound='left')
+
+
+        self.manual_update_btn.pack(side='left')
+
+        # Estilo para o botão do rodapé ficar menor
+        style.configure('Small.TButton', font=('', 7))
+
 
         self._set_buttons_state('disabled')
 
@@ -519,11 +621,12 @@ class App(tk.Tk):
     def hide_loading(self):
         self.loading.hide()
 
-    def check_for_updates(self):
-        thread = threading.Thread(target=self._check_updates_worker, daemon=True)
+    def check_for_updates(self, manual=False):
+        thread = threading.Thread(target=self._check_updates_worker, args=(manual,), daemon=True)
         thread.start()
 
-    def _check_updates_worker(self):
+    def _check_updates_worker(self, manual=False):
+
         try:
             current_version = self._get_version()
             url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -549,11 +652,106 @@ class App(tk.Tk):
                     if asset_url:
                         self.update_url = asset_url
                         self.after(0, lambda: UpdateDialog(self, remote_version, notes))
+                        return # Sai pois a atualização tem prioridade
+                
+            # Se não houve atualização, verifica se precisa de scan inicial
+            if manual:
+                self.after(0, lambda: messagebox.showinfo(APP_TITLE, "Você já está na versão mais recente!"))
+            
+            self.after(0, self._ask_initial_scan)
+        except Exception as e:
+            if manual:
+                self.after(0, lambda: messagebox.showerror(APP_TITLE, f"Falha na comunicação com o servidor:\n{e}"))
+            # Se falhar a verificação, também tenta o scan inicial
+            self.after(0, self._ask_initial_scan)
+
+
+
+
+    def start_auto_scan(self):
+        drives = []
+        try:
+            # Obtém drives no Windows
+            import string
+            from ctypes import windll
+            bitmask = windll.kernel32.GetLogicalDrives()
+            for letter in string.ascii_uppercase:
+                if bitmask & 1:
+                    drives.append(f"{letter}:\\")
+                bitmask >>= 1
         except Exception:
-            pass
+            drives = ["C:\\"]
+
+        if not drives:
+            return
+
+        selected_drive = drives[0]
+        if len(drives) > 1:
+            dialog = DriveSelectionDialog(self, drives)
+            self.wait_window(dialog)
+            if not dialog.result:
+                return
+            selected_drive = dialog.result
+
+        self.show_loading(f"Buscando instalações em {selected_drive}...\n(Isto pode levar alguns minutos)")
+        thread = threading.Thread(target=self._auto_scan_worker, args=(selected_drive,), daemon=True)
+        thread.start()
+
+    def _auto_scan_worker(self, root_path):
+        found_paths = []
+        ignore_folders = {'windows', '$recycle.bin', 'users', 'usuários', 'system volume information', 'programdata', 'temp'}
+        
+        try:
+            for root, dirs, files in os.walk(root_path):
+                # Filtra pastas ignoradas para não descer nelas
+                dirs[:] = [d for d in dirs if d.lower() not in ignore_folders]
+                
+                if 'genexus.exe' in [f.lower() for f in files]:
+                    # Verifica se também tem o gxlmgr.exe
+                    if 'gxlmgr.exe' in [f.lower() for f in files]:
+                        found_paths.append(Path(root))
+        except Exception as e:
+            self.log(f"Erro durante a varredura: {e}")
+
+        self.after(0, self.hide_loading)
+        if not found_paths:
+            self.after(0, lambda: messagebox.showinfo(APP_TITLE, "Nenhuma instalação válida foi encontrada."))
+        else:
+            self.after(0, lambda: self._ask_names_sequential(found_paths))
+
+    def _ask_names_sequential(self, paths):
+        added_count = 0
+        for path in paths:
+            # Verifica se já está cadastrado
+            if any(os.path.realpath(inst['path']).lower() == os.path.realpath(path).lower() for inst in self.store.get_all()):
+                continue
+                
+            dialog = NamingDialog(self, path)
+            self.wait_window(dialog)
+            if dialog.result:
+                item = {
+                    'name': dialog.result,
+                    'path': str(path),
+                    'ide_style': 'silver',
+                    'open_args': DEFAULT_OPEN_ARGS
+                }
+                # Extrai ícone
+                icon_data = self._extract_icon_data(path / 'genexus.exe')
+                if icon_data:
+                    item['icon_data'] = icon_data
+                
+                self.store.add(item)
+                added_count += 1
+        
+        if added_count > 0:
+            self._load_installations()
+            messagebox.showinfo(APP_TITLE, f"Sucesso! {added_count} instalações foram adicionadas.")
+        else:
+            messagebox.showinfo(APP_TITLE, "Nenhuma nova instalação foi encontrada.")
 
 
     def start_update_process(self):
+
         self.show_loading("Baixando atualização (0%)...")
         thread = threading.Thread(target=self._download_update_worker, daemon=True)
         thread.start()
@@ -578,15 +776,15 @@ class App(tk.Tk):
     def _apply_update(self):
         try:
             exe_path = sys.executable
-            # Cria script batch para substituir e reiniciar
-            # timeout /t 2 garante que este processo fechou
+            # Script batch para substituir arquivos. Removido o 'start' para evitar erro de DLL.
             bat_content = f"""@echo off
 set EXE_NAME={Path(exe_path).name}
 timeout /t 2 /nobreak > nul
 taskkill /f /im "%EXE_NAME%" > nul 2>&1
 powershell -Command "Expand-Archive -Path 'last_version.zip' -DestinationPath '.' -Force"
 if exist "last_version.zip" del "last_version.zip"
-start "" "%EXE_NAME%"
+powershell -Command "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show('Atualizacao concluida com sucesso!' + [char]10 + [char]10 + 'Voce ja pode iniciar o aplicativo novamente.', 'GeneXus Launcher')"
+
 del "%~f0"
 """
 
@@ -599,6 +797,7 @@ del "%~f0"
         except Exception as e:
             self.after(0, lambda: messagebox.showerror(APP_TITLE, f"Erro ao aplicar: {e}"))
             self.after(0, self.hide_loading)
+
 
     def _create_fallback_icon(self):
 
@@ -808,6 +1007,13 @@ del "%~f0"
             self.on_select()
         else:
             self.on_select()
+
+
+    def _ask_initial_scan(self):
+        if not self.store.get_all():
+            if messagebox.askyesno(APP_TITLE, "Nenhuma instalação foi encontrada.\nDeseja realizar uma varredura automática no computador?"):
+                self.start_auto_scan()
+
 
     def _set_buttons_state(self, state):
         self.clean_open_btn.config(state=state)
