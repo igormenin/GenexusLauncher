@@ -265,10 +265,12 @@ class LoadingOverlay(tk.Toplevel):
     def show(self, message="Processando..."):
         self.message_var.set(message)
         self._reposition()
+        self.attributes("-topmost", True)
         self.deiconify()
         self.lift()
         self.start_animation()
         self.update()
+
 
     def hide(self):
         self.stop_animation()
@@ -1154,7 +1156,9 @@ del "%~f0"
             self.after(0, lambda: messagebox.showerror(APP_TITLE, str(exc)))
             self.log(f'Erro ao abrir GeneXus: {exc}')
         finally:
-            self.after(0, self.hide_loading)
+            # Pequeno delay para o feedback visual não sumir instantaneamente
+            self.after(1500, self.hide_loading)
+
 
     def check_selected_instance(self):
         _, item = self._selected_item()
