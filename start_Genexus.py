@@ -265,11 +265,11 @@ class LoadingOverlay(tk.Toplevel):
     def show(self, message="Processando..."):
         self.message_var.set(message)
         self._reposition()
-        self.attributes("-topmost", True)
         self.deiconify()
         self.lift()
         self.start_animation()
         self.update()
+
 
 
     def hide(self):
