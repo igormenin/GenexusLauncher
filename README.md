@@ -62,6 +62,8 @@ O projeto utiliza **GitHub Actions** para automatizar o build e a distribuição
 
 ## 📝 Notas de Versão
 
+- **v1.33**: Correção e do feedback visual (LOADING).
+
 - **v1.32**: Correção e aprimoramento do feedback visual (LOADING), garantindo visibilidade prioritária e tempo mínimo de exibição para ações rápidas. Estabilização da interface e ícones.
 
 - **v1.31**: Implementado sistema de **Auto-Scan** para busca automática de instalações, nova interface visual com ícones coloridos, botão de verificação manual no rodapé e melhorias críticas de estabilidade no processo de upgrade.
