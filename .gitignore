@@ -19,3 +19,7 @@ installations.json
 .project
 .pydevproject
 .settings/
+
+# Scripts Locais
+enviar_tag.ps1
+

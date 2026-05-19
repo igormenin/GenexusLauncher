@@ -42,9 +42,12 @@ Write-Host "`nLimpando pastas de build..." -ForegroundColor Cyan
 Remove-Item -Path ".\build" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path ".\dist" -Recurse -Force -ErrorAction SilentlyContinue
 
+Write-Host "`nGarante que o PyInstaller está atualizado para evitar erros de cleanup..." -ForegroundColor Cyan
+pip install --upgrade pyinstaller
+
 Write-Host "`nCompilando com PyInstaller (isso pode levar alguns instantes)..." -ForegroundColor Cyan
 # Rodamos o PyInstaller
-& pyinstaller --onefile --windowed --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." .\start_Genexus.py
+& pyinstaller --onefile --windowed --noupx --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." .\start_Genexus.py
 
 
 

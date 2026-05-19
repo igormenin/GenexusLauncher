@@ -491,6 +491,7 @@ class App(tk.Tk):
             except Exception:
                 pass
         self.destroy()
+        sys.exit(0)
 
     def _build_ui(self):
         self.columnconfigure(0, weight=1)
