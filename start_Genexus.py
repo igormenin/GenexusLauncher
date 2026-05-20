@@ -795,7 +795,7 @@ del "%~f0"
             bat_path.write_text(bat_content, encoding='ansi')
             
             # Executa e fecha
-            subprocess.Popen([str(bat_path)], shell=True)
+            self._safe_popen([str(bat_path)], shell=True)
             self.after(0, self.on_closing)
         except Exception as e:
             self.after(0, lambda: messagebox.showerror(APP_TITLE, f"Erro ao aplicar: {e}"))
@@ -1212,11 +1212,7 @@ del "%~f0"
             if not gxlmgr_exe.exists():
                 raise FileNotFoundError(f'Arquivo não encontrado: {gxlmgr_exe}')
             
-            env = os.environ.copy()
-            if "_MEIPASS" in env:
-                del env["_MEIPASS"]
-                
-            subprocess.Popen([str(gxlmgr_exe)], cwd=str(gx_path), shell=False, env=env)
+            self._safe_popen([str(gxlmgr_exe)], cwd=str(gx_path), shell=False)
             self.log(f'Aberto: License Manager ({item["name"]})')
         except Exception as exc:
             messagebox.showerror(APP_TITLE, str(exc))
@@ -1287,6 +1283,47 @@ del "%~f0"
             self.after(0, self.on_select)
 
 
+    def _safe_popen(self, command, **kwargs):
+        """Spawns a subprocess with a cleaned environment and DLL search path to prevent
+        the child process from locking the PyInstaller temporary directory (_MEIPASS)."""
+        import ctypes
+        
+        env = kwargs.get("env")
+        if env is None:
+            env = os.environ.copy()
+        else:
+            env = env.copy()
+            
+        if "_MEIPASS" in env:
+            del env["_MEIPASS"]
+            
+        is_frozen = getattr(sys, 'frozen', False)
+        if is_frozen and hasattr(sys, '_MEIPASS'):
+            bundle_dir = sys._MEIPASS
+            if "PATH" in env:
+                paths = env["PATH"].split(os.pathsep)
+                env["PATH"] = os.pathsep.join(
+                    [p for p in paths if p.lower() != bundle_dir.lower()]
+                )
+                
+        kwargs["env"] = env
+        kwargs["close_fds"] = True
+        
+        if is_frozen and os.name == "nt":
+            try:
+                ctypes.windll.kernel32.SetDllDirectoryW(None)
+            except Exception:
+                pass
+                
+        try:
+            return subprocess.Popen(command, **kwargs)
+        finally:
+            if is_frozen and os.name == "nt" and hasattr(sys, '_MEIPASS'):
+                try:
+                    ctypes.windll.kernel32.SetDllDirectoryW(sys._MEIPASS)
+                except Exception:
+                    pass
+
     def _open_genexus(self, item):
         gx_path = Path(item['path'])
         genexus_exe = gx_path / 'genexus.exe'
@@ -1294,11 +1331,7 @@ del "%~f0"
             raise FileNotFoundError(f'Arquivo não encontrado: {genexus_exe}')
         args = item.get('open_args') or DEFAULT_OPEN_ARGS
         
-        env = os.environ.copy()
-        if "_MEIPASS" in env:
-            del env["_MEIPASS"]
-            
-        subprocess.Popen([str(genexus_exe), *args], cwd=str(gx_path), shell=False, env=env)
+        self._safe_popen([str(genexus_exe), *args], cwd=str(gx_path), shell=False)
 
     def _stream_process(self, command, cwd=None):
         kwargs = {
@@ -1313,12 +1346,7 @@ del "%~f0"
         if os.name == "nt":
             kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
 
-        env = os.environ.copy()
-        if "_MEIPASS" in env:
-            del env["_MEIPASS"]
-        kwargs["env"] = env
-
-        self.current_process = subprocess.Popen(command, **kwargs)
+        self.current_process = self._safe_popen(command, **kwargs)
         process = self.current_process
 
         assert process.stdout is not None

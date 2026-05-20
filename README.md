@@ -62,12 +62,12 @@ O projeto utiliza **GitHub Actions** para automatizar o build e a distribuição
 
 ## 📝 Notas de Versão
 
-- **v1.33**: Correção e do feedback visual (LOADING).
-
+- **v1.36**: Correção definitiva do erro de remoção do diretório temporário (`_MEIPASS`) do PyInstaller no Windows. Ao iniciar subprocessos (como GeneXus ou License Manager), o ambiente é limpo (removendo `_MEIPASS` e limpando o `PATH`) e a diretiva de busca de DLLs (`SetDllDirectoryW`) é temporariamente redefinida para evitar locks indesejados.
+- **v1.35**: Tentativa de correção de travamento no encerramento do processo com `sys.exit(0)`, atualização do PyInstaller e desativação do UPX. Ignorados scripts de implantação locais no repositório.
+- **v1.34**: Ajustes de versão e documentação no histórico do README.
+- **v1.33**: Correção e melhoria do feedback visual do LOADING.
 - **v1.32**: Correção e aprimoramento do feedback visual (LOADING), garantindo visibilidade prioritária e tempo mínimo de exibição para ações rápidas. Estabilização da interface e ícones.
-
 - **v1.31**: Implementado sistema de **Auto-Scan** para busca automática de instalações, nova interface visual com ícones coloridos, botão de verificação manual no rodapé e melhorias críticas de estabilidade no processo de upgrade.
-
 - **v1.30**: Correção nas dependências do CI/CD (Pillow) para suporte a ícones PNG e atualização do fluxo de build.
 - **v1.29**: Implementado sistema de atualização automática via GitHub e build automatizado com GitHub Actions. Adicionado modal de loading com fundo transparente.
 - **v1.28**: Adicionada persistência da última versão selecionada via Hash MD5 e validação de caminhos duplicados.
