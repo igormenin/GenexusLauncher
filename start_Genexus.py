@@ -394,6 +394,76 @@ class UpdateDialog(tk.Toplevel):
         self.master.start_update_process()
 
 
+class AboutDialog(tk.Toplevel):
+    def __init__(self, master):
+        super().__init__(master)
+        self.title("Sobre o GeneXus Launcher")
+        self.resizable(False, False)
+        self.transient(master)
+        self.grab_set()
+
+        body = ttk.Frame(self, padding=20)
+        body.pack(fill='both', expand=True)
+
+        # Cabeçalho com ícone e título
+        header_frame = ttk.Frame(body)
+        header_frame.pack(fill='x', pady=(0, 15))
+
+        # Se existir o ícone da aplicação, exibe-o redimensionado
+        if master.app_icon:
+            try:
+                # O ícone original é 1200x1200px, subsample(12, 12) reduz para ~100x100px
+                self.resized_icon = master.app_icon.subsample(12, 12)
+                lbl_icon = ttk.Label(header_frame, image=self.resized_icon)
+                lbl_icon.pack(side='left', padx=(0, 15))
+            except Exception:
+                pass
+
+        info_frame = ttk.Frame(header_frame)
+        info_frame.pack(side='left', fill='both', expand=True)
+
+        ttk.Label(info_frame, text="GeneXus Launcher", font=('', 16, 'bold')).pack(anchor='w')
+        ttk.Label(info_frame, text=f"Versão {master._get_version()}", font=('', 11), foreground='gray').pack(anchor='w')
+        ttk.Label(info_frame, text="Desenvolvido por Igor Menin", font=('', 10, 'italic')).pack(anchor='w', pady=(4, 4))
+
+        # Informações de Contato sob o autor
+        contact_frame = ttk.Frame(info_frame)
+        contact_frame.pack(anchor='w')
+
+        ttk.Label(contact_frame, text="E-mail:", font=('', 9, 'bold')).grid(row=0, column=0, sticky='w', padx=(0, 5))
+        ttk.Label(contact_frame, text="igormenin@gmail.com", font=('', 9)).grid(row=0, column=1, sticky='w')
+
+        ttk.Label(contact_frame, text="GitHub:", font=('', 9, 'bold')).grid(row=1, column=0, sticky='w', padx=(0, 5))
+        ttk.Label(contact_frame, text="github.com/igormenin", font=('', 9)).grid(row=1, column=1, sticky='w')
+
+        # Linha divisória
+        ttk.Separator(body, orient='horizontal').pack(fill='x', pady=10)
+
+        # Seção sobre as Tecnologias
+        ttk.Label(body, text="Tecnologias Utilizadas", font=('', 11, 'bold')).pack(anchor='w', pady=(0, 5))
+
+        tech_frame = ttk.Frame(body)
+        tech_frame.pack(fill='x', pady=(0, 10))
+
+        technologies = [
+            ("Python 3", "Linguagem base do projeto, versátil e multiplataforma."),
+            ("Tkinter / Ttk", "Interface gráfica leve, nativa e sem dependências pesadas."),
+            ("PowerShell", "Integração profunda para monitorar e validar processos no Windows."),
+            ("PyInstaller", "Empacotamento do app em executável único auto-suficiente."),
+            ("GitHub Actions", "Automatização de compilação (CI) e fluxo de deploy (CD).")
+        ]
+
+        for idx, (tech, desc) in enumerate(technologies):
+            ttk.Label(tech_frame, text=f"• {tech}:", font=('', 9, 'bold')).grid(row=idx, column=0, sticky='w', pady=2, padx=(0, 5))
+            ttk.Label(tech_frame, text=desc, font=('', 9), wraplength=320, justify='left').grid(row=idx, column=1, sticky='w', pady=2)
+
+        # Botão de Fechar
+        btn_close = ttk.Button(body, text="Fechar", command=self.destroy)
+        btn_close.pack(anchor='e', pady=(10, 0))
+
+        center_window(self, master)
+
+
 class App(tk.Tk):
 
 
@@ -454,7 +524,8 @@ class App(tk.Tk):
             'up': 'up-arrow.png',
             'down': 'down-arrow.png',
             'update': 'cloud-download.png',
-            'edit': 'edit.png'
+            'edit': 'edit.png',
+            'info': 'botao-de-informacao.png'
         }
 
 
@@ -612,6 +683,11 @@ class App(tk.Tk):
 
         self.manual_update_btn.pack(side='left')
 
+        self.about_btn = ttk.Button(footer_frame, text=" Sobre", 
+                                    command=self.show_about, 
+                                    style='Small.TButton', image=self.btn_icons.get('info'), compound='left')
+        self.about_btn.pack(side='left', padx=(4, 0))
+
         # Estilo para o botão do rodapé ficar menor
         style.configure('Small.TButton', font=('', 7))
 
@@ -629,6 +705,11 @@ class App(tk.Tk):
         thread.start()
 
     def _check_updates_worker(self, manual=False):
+        def parse_version(v_str):
+            try:
+                return tuple(int(x) for x in v_str.strip().split('.'))
+            except Exception:
+                return (0,)
 
         try:
             current_version = self._get_version()
@@ -642,8 +723,8 @@ class App(tk.Tk):
                 data = json.loads(response.read().decode())
                 remote_version = data['tag_name'].strip('vV')
                 
-                # Comparação simples de versão
-                if remote_version != current_version:
+                # Comparação inteligente de versão
+                if parse_version(remote_version) > parse_version(current_version):
                     notes = data.get('body', '')
                     # Encontra o asset last_version.zip
                     asset_url = None
@@ -668,8 +749,9 @@ class App(tk.Tk):
             # Se falhar a verificação, também tenta o scan inicial
             self.after(0, self._ask_initial_scan)
 
-
-
+    def show_about(self):
+        dialog = AboutDialog(self)
+        self.wait_window(dialog)
 
     def start_auto_scan(self):
         drives = []
@@ -1361,7 +1443,7 @@ del "%~f0"
         """Retorna uma lista de pastas únicas onde o genexus.exe está rodando no momento"""
         try:
             # Usa PowerShell que é mais confiável e insensível a maiúsculas/minúsculas
-            cmd = 'powershell -NoProfile -Command "Get-Process GeneXus -ErrorAction SilentlyContinue | Where-Object { $_.Path -ne $null } | ForEach-Object { $_.Path }"'
+            cmd = 'powershell -NoProfile -Command "Get-Process | Where-Object { $_.ProcessName -eq \'GeneXus\' } | Where-Object { $_.Path -ne $null } | ForEach-Object { $_.Path }"'
             startupinfo = None
             if os.name == 'nt':
                 startupinfo = subprocess.STARTUPINFO()
