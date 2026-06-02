@@ -8,6 +8,7 @@ import subprocess
 import threading
 import urllib.request
 import zipfile
+import webbrowser
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -353,7 +354,8 @@ class UpdateDialog(tk.Toplevel):
         self.attributes("-topmost", True)
         self.configure(bg='#1e1e1e')
         
-        w, h = 450, 320
+        # Aumentado para 480x380 para comportar os novos textos e links com boa proporção
+        w, h = 480, 380
         # Tenta centralizar
         try:
             x = master.winfo_rootx() + (master.winfo_width() - w) // 2
@@ -370,11 +372,45 @@ class UpdateDialog(tk.Toplevel):
         tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg='#1e1e1e', font=('', 16, 'bold')).pack(pady=(0, 15))
         tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg='white', bg='#1e1e1e', font=('', 11)).pack(pady=(0, 10))
 
-        notes_frame = tk.Frame(container, bg='#2d2d2d', padx=5, pady=5)
-        notes_frame.pack(fill='both', expand=True, pady=10)
+        # Lógica de processamento das notas de atualização
+        import re
+        changelog_url = None
+        notes_display = ""
         
-        txt = tk.Text(notes_frame, height=5, bg='#2d2d2d', fg='#cccccc', font=('', 10), borderwidth=0, highlightthickness=0)
-        txt.insert('1.0', notes or "Melhorias e correções gerais.")
+        if notes:
+            # Extrair link do GitHub se houver
+            link_match = re.search(r'https://github.com/[^\s)]+', notes)
+            if link_match:
+                changelog_url = link_match.group(0)
+                notes = notes.replace(changelog_url, "")
+            
+            # Limpeza do Markdown
+            notes = re.sub(r'\*+Full Changelog\*+:\s*', "", notes)
+            notes = notes.replace("**", "").strip()
+            
+            # Converte marcadores markdown para marcadores limpos
+            lines = []
+            for line in notes.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith(('-', '*')):
+                    line = "• " + line[1:].strip()
+                lines.append(line)
+            notes_display = "\n".join(lines)
+            
+        # Fallback amigável se não houver notas
+        if not notes_display or len(notes_display) < 6:
+            notes_display = (
+                "• Correções de bugs e melhorias gerais de estabilidade.\n"
+                "• Otimizações internas e estabilização de processos."
+            )
+
+        notes_frame = tk.Frame(container, bg='#2d2d2d', padx=5, pady=5)
+        notes_frame.pack(fill='both', expand=True, pady=(0, 10))
+        
+        txt = tk.Text(notes_frame, height=4, bg='#2d2d2d', fg='#cccccc', font=('', 10), borderwidth=0, highlightthickness=0)
+        txt.insert('1.0', notes_display)
         txt.config(state='disabled')
         txt.pack(side='left', fill='both', expand=True)
         
@@ -382,9 +418,22 @@ class UpdateDialog(tk.Toplevel):
         scroll.pack(side='right', fill='y')
         txt.config(yscrollcommand=scroll.set)
 
+        # Exibir link clicável do GitHub
+        if changelog_url:
+            link_lbl = tk.Label(container, text="Ver log de alterações completo no GitHub", 
+                                fg="#5cacee", bg='#1e1e1e', font=('', 9, 'underline'), cursor="hand2")
+            link_lbl.pack(pady=(0, 10))
+            link_lbl.bind("<Button-1>", lambda e: webbrowser.open(changelog_url))
+
+        # Guia Informativo sobre a atualização automática
+        info_lbl = tk.Label(container, 
+                            text="Nota: O launcher será fechado temporariamente para baixar o novo executável.\nAo final do processo, você será notificado sobre a conclusão.", 
+                            fg='#888888', bg='#1e1e1e', font=('', 8), justify='center')
+        info_lbl.pack(pady=(0, 12))
+
         self.btn = tk.Button(container, text="INICIAR ATUALIZAÇÃO", bg="#0b5cab", fg="white", font=('', 11, 'bold'), 
                              padx=20, pady=10, borderwidth=0, cursor="hand2", command=self.confirm)
-        self.btn.pack(pady=(15, 0))
+        self.btn.pack(pady=(5, 0))
         
         self.deiconify()
         self.grab_set()
