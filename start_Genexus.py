@@ -347,7 +347,7 @@ class NamingDialog(tk.Toplevel):
 
 class UpdateDialog(tk.Toplevel):
 
-    def __init__(self, master, version, notes):
+    def __init__(self, master, version, notes, commits=None):
         super().__init__(master)
         self.withdraw()
         self.overrideredirect(True)
@@ -372,7 +372,7 @@ class UpdateDialog(tk.Toplevel):
         tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg='#1e1e1e', font=('', 16, 'bold')).pack(pady=(0, 15))
         tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg='white', bg='#1e1e1e', font=('', 11)).pack(pady=(0, 10))
 
-        # Lógica de processamento das notas de atualização
+        # Lógica de processamento das notas de atualização e commits
         import re
         changelog_url = None
         notes_display = ""
@@ -399,12 +399,25 @@ class UpdateDialog(tk.Toplevel):
                 lines.append(line)
             notes_display = "\n".join(lines)
             
-        # Fallback amigável se não houver notas
+        if commits:
+            commits_lines = [f"• {c}" for c in commits if c.strip()]
+            if commits_lines:
+                if notes_display:
+                    notes_display += "\n\nAlterações detalhadas (Commits):\n" + "\n".join(commits_lines)
+                else:
+                    notes_display = "\n".join(commits_lines)
+
+        # Fallback amigável se não houver notas nem commits
         if not notes_display or len(notes_display) < 6:
             notes_display = (
                 "• Correções de bugs e melhorias gerais de estabilidade.\n"
                 "• Otimizações internas e estabilização de processos."
             )
+            
+        if not changelog_url:
+            # Reconstrói a URL do compare se não estiver nas notas
+            prefix = "v" if version.lower().startswith('v') else ""
+            changelog_url = f"https://github.com/{GITHUB_REPO}/compare/v{master._get_version()}...{prefix}{version}"
 
         notes_frame = tk.Frame(container, bg='#2d2d2d', padx=5, pady=5)
         notes_frame.pack(fill='both', expand=True, pady=(0, 10))
@@ -784,7 +797,27 @@ class App(tk.Tk):
                     
                     if asset_url:
                         self.update_url = asset_url
-                        self.after(0, lambda: UpdateDialog(self, remote_version, notes))
+                        
+                        # Tenta obter a lista de commits entre as duas versões
+                        commits_info = []
+                        try:
+                            remote_tag = data['tag_name']
+                            prefix = "v" if remote_tag.lower().startswith('v') else ""
+                            current_tag = f"{prefix}{current_version}"
+                            
+                            compare_api_url = f"https://api.github.com/repos/{GITHUB_REPO}/compare/{current_tag}...{remote_tag}"
+                            compare_req = urllib.request.Request(compare_api_url)
+                            compare_req.add_header('User-Agent', 'GXLauncher-Updater')
+                            with urllib.request.urlopen(compare_req) as compare_res:
+                                compare_data = json.loads(compare_res.read().decode())
+                                for commit_obj in compare_data.get('commits', []):
+                                    msg = commit_obj.get('commit', {}).get('message', '').splitlines()
+                                    if msg:
+                                        commits_info.append(msg[0].strip())
+                        except Exception:
+                            pass
+                            
+                        self.after(0, lambda: UpdateDialog(self, remote_version, notes, commits_info))
                         return # Sai pois a atualização tem prioridade
                 
             # Se não houve atualização, verifica se precisa de scan inicial
