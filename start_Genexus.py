@@ -716,10 +716,12 @@ class App(tk.Tk):
         self.clean_open_btn.grid(row=0, column=0, padx=(0, 8))
         self.open_btn = ttk.Button(actions, text='Só iniciar GeneXus', command=self.open_selected)
         self.open_btn.grid(row=0, column=1)
+        self.open_folder_btn = ttk.Button(actions, text='Abrir Pasta', command=self.open_folder_selected)
+        self.open_folder_btn.grid(row=0, column=2, padx=(8, 0))
         self.lmgr_btn = ttk.Button(actions, text='License Manager', command=self.open_license_manager)
-        self.lmgr_btn.grid(row=0, column=2, padx=(8, 0))
+        self.lmgr_btn.grid(row=0, column=3, padx=(8, 0))
         self.check_btn = ttk.Button(actions, text='Validar Instância', command=self.check_selected_instance)
-        self.check_btn.grid(row=0, column=3, padx=(8, 0))
+        self.check_btn.grid(row=0, column=4, padx=(8, 0))
 
         log_frame = ttk.LabelFrame(right, text='Log', padding=10)
         log_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
@@ -762,7 +764,17 @@ class App(tk.Tk):
     def hide_loading(self):
         self.loading.hide()
 
+    def is_dev_env(self):
+        import os
+        is_frozen = getattr(sys, 'frozen', False)
+        username = os.environ.get('USERNAME', '').lower()
+        return (not is_frozen) or (username == 'igoragl')
+
     def check_for_updates(self, manual=False):
+        if not manual and self.is_dev_env():
+            self.log("[Update] Busca automática de atualizações desativada no ambiente de desenvolvimento.")
+            self.after(0, self._ask_initial_scan)
+            return
         thread = threading.Thread(target=self._check_updates_worker, args=(manual,), daemon=True)
         thread.start()
 
@@ -1185,6 +1197,7 @@ del "%~f0"
     def _set_buttons_state(self, state):
         self.clean_open_btn.config(state=state)
         self.open_btn.config(state=state)
+        self.open_folder_btn.config(state=state)
         self.lmgr_btn.config(state=state)
         self.check_btn.config(state=state)
         self.edit_btn.config(state=state)
@@ -1381,6 +1394,22 @@ del "%~f0"
         except Exception as exc:
             messagebox.showerror(APP_TITLE, str(exc))
             self.log(f'Erro ao abrir License Manager: {exc}')
+
+    def open_folder_selected(self):
+        _, item = self._selected_item()
+        if item is None:
+            messagebox.showwarning(APP_TITLE, 'Selecione uma instalação.')
+            return
+        try:
+            gx_path = Path(item['path'])
+            if not gx_path.exists():
+                raise FileNotFoundError(f'Pasta não encontrada: {gx_path}')
+            
+            os.startfile(str(gx_path))
+            self.log(f'Pasta aberta: {gx_path}')
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, str(exc))
+            self.log(f'Erro ao abrir pasta: {exc}')
 
     def prepare_and_open_selected(self):
         _, item = self._selected_item()
