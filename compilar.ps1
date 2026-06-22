@@ -47,7 +47,7 @@ pip install --upgrade pyinstaller
 
 Write-Host "`nCompilando com PyInstaller (isso pode levar alguns instantes)..." -ForegroundColor Cyan
 # Rodamos o PyInstaller
-& pyinstaller --onefile --windowed --noupx --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." .\start_Genexus.py
+& pyinstaller --onefile --windowed --noupx --uac-admin --name GeneXusLauncher --icon=images/AppIcon.png --add-data "images;images" --add-data "version.config;." --collect-data sv_ttk .\start_Genexus.py
 
 
 

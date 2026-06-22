@@ -12,6 +12,7 @@ import webbrowser
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import sv_ttk
 
 GITHUB_REPO = "igormenin/GenexusLauncher"
 
@@ -352,7 +353,25 @@ class UpdateDialog(tk.Toplevel):
         self.withdraw()
         self.overrideredirect(True)
         self.attributes("-topmost", True)
-        self.configure(bg='#1e1e1e')
+        
+        # Cores adaptativas baseadas no tema do master
+        theme = getattr(master, 'theme', 'dark')
+        if theme == 'dark':
+            bg_color = '#1e1e1e'
+            fg_color = 'white'
+            text_bg = '#2d2d2d'
+            text_fg = '#cccccc'
+            link_fg = '#5cacee'
+            info_fg = '#888888'
+        else:
+            bg_color = '#ffffff'
+            fg_color = 'black'
+            text_bg = '#f3f3f3'
+            text_fg = '#333333'
+            link_fg = '#0b5cab'
+            info_fg = '#666666'
+
+        self.configure(bg=bg_color)
         
         # Aumentado para 480x380 para comportar os novos textos e links com boa proporção
         w, h = 480, 380
@@ -366,11 +385,11 @@ class UpdateDialog(tk.Toplevel):
             
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-        container = tk.Frame(self, bg='#1e1e1e', padx=30, pady=30, highlightbackground="#0b5cab", highlightthickness=2)
+        container = tk.Frame(self, bg=bg_color, padx=30, pady=30, highlightbackground="#0b5cab", highlightthickness=2)
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg='#1e1e1e', font=('', 16, 'bold')).pack(pady=(0, 15))
-        tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg='white', bg='#1e1e1e', font=('', 11)).pack(pady=(0, 10))
+        tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg=bg_color, font=('', 16, 'bold')).pack(pady=(0, 15))
+        tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg=fg_color, bg=bg_color, font=('', 11)).pack(pady=(0, 10))
 
         # Lógica de processamento das notas de atualização e commits
         import re
@@ -419,10 +438,10 @@ class UpdateDialog(tk.Toplevel):
             prefix = "v" if version.lower().startswith('v') else ""
             changelog_url = f"https://github.com/{GITHUB_REPO}/compare/v{master._get_version()}...{prefix}{version}"
 
-        notes_frame = tk.Frame(container, bg='#2d2d2d', padx=5, pady=5)
+        notes_frame = tk.Frame(container, bg=text_bg, padx=5, pady=5)
         notes_frame.pack(fill='both', expand=True, pady=(0, 10))
         
-        txt = tk.Text(notes_frame, height=4, bg='#2d2d2d', fg='#cccccc', font=('', 10), borderwidth=0, highlightthickness=0)
+        txt = tk.Text(notes_frame, height=4, bg=text_bg, fg=text_fg, font=('', 10), borderwidth=0, highlightthickness=0)
         txt.insert('1.0', notes_display)
         txt.config(state='disabled')
         txt.pack(side='left', fill='both', expand=True)
@@ -434,14 +453,14 @@ class UpdateDialog(tk.Toplevel):
         # Exibir link clicável do GitHub
         if changelog_url:
             link_lbl = tk.Label(container, text="Ver log de alterações completo no GitHub", 
-                                fg="#5cacee", bg='#1e1e1e', font=('', 9, 'underline'), cursor="hand2")
+                                fg=link_fg, bg=bg_color, font=('', 9, 'underline'), cursor="hand2")
             link_lbl.pack(pady=(0, 10))
             link_lbl.bind("<Button-1>", lambda e: webbrowser.open(changelog_url))
 
         # Guia Informativo sobre a atualização automática
         info_lbl = tk.Label(container, 
                             text="Nota: O launcher será fechado temporariamente para baixar o novo executável.\nAo final do processo, você será notificado sobre a conclusão.", 
-                            fg='#888888', bg='#1e1e1e', font=('', 8), justify='center')
+                            fg=info_fg, bg=bg_color, font=('', 8), justify='center')
         info_lbl.pack(pady=(0, 12))
 
         self.btn = tk.Button(container, text="INICIAR ATUALIZAÇÃO", bg="#0b5cab", fg="white", font=('', 11, 'bold'), 
@@ -538,6 +557,9 @@ class App(tk.Tk):
         self.minsize(920, 560)
 
         self.store = InstallationStore(CONFIG_FILE)
+        self.theme = self.store.data.get('theme', 'dark')
+        sv_ttk.set_theme(self.theme)
+
         self.log_queue = queue.Queue()
         self.running = False
         self.current_process = None
@@ -548,12 +570,15 @@ class App(tk.Tk):
         self._build_ui()
         self.loading = LoadingOverlay(self)
         self._load_installations()
+        
+        self._apply_theme_non_ttk()
 
         self.update_idletasks()
         center_window(self)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.after(150, self._drain_log_queue)
         self.after(1000, self.check_for_updates)
+
 
 
     def _setup_window_icon(self):
@@ -587,7 +612,9 @@ class App(tk.Tk):
             'down': 'down-arrow.png',
             'update': 'cloud-download.png',
             'edit': 'edit.png',
-            'info': 'botao-de-informacao.png'
+            'info': 'botao-de-informacao.png',
+            'sun': 'sun.png',
+            'moon': 'moon.png'
         }
 
 
@@ -735,7 +762,7 @@ class App(tk.Tk):
         self.log_text.config(yscrollcommand=scrollbar.set)
 
         footer_frame = ttk.Frame(root)
-        footer_frame.grid(row=1, column=0, columnspan=2, sticky='e', pady=(6, 0))
+        footer_frame.grid(row=1, column=1, sticky='e', pady=(6, 0))
 
         footer = ttk.Label(footer_frame, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), foreground='gray')
         footer.pack(side='left', padx=(0, 10))
@@ -743,14 +770,18 @@ class App(tk.Tk):
         self.manual_update_btn = ttk.Button(footer_frame, text="Verificar Atualização", 
                                             command=lambda: self.check_for_updates(manual=True), 
                                             style='Small.TButton', image=self.btn_icons.get('update'), compound='left')
-
-
         self.manual_update_btn.pack(side='left')
 
         self.about_btn = ttk.Button(footer_frame, text=" Sobre", 
                                     command=self.show_about, 
                                     style='Small.TButton', image=self.btn_icons.get('info'), compound='left')
         self.about_btn.pack(side='left', padx=(4, 0))
+
+        # Botão de alternar tema posicionado bem à esquerda da linha do rodapé
+        self.theme_btn = ttk.Button(root, image='', 
+                                    command=self.toggle_theme, 
+                                    style='Small.TButton')
+        self.theme_btn.grid(row=1, column=0, sticky='w', pady=(6, 0))
 
         # Estilo para o botão do rodapé ficar menor
         style.configure('Small.TButton', font=('', 7))
@@ -846,6 +877,50 @@ class App(tk.Tk):
     def show_about(self):
         dialog = AboutDialog(self)
         self.wait_window(dialog)
+
+    def toggle_theme(self):
+        if self.theme == "dark":
+            self.theme = "light"
+        else:
+            self.theme = "dark"
+            
+        sv_ttk.set_theme(self.theme)
+        self.store.data['theme'] = self.theme
+        self.store.save()
+        self._apply_theme_non_ttk()
+
+    def _apply_theme_non_ttk(self):
+        if self.theme == "dark":
+            bg_color = "#1c1c1c"
+            fg_color = "#ffffff"
+            cursor_color = "#ffffff"
+            text_select_bg = "#0078d4"
+            theme_icon = self.btn_icons.get('sun')
+            theme_btn_text = "☀️" if not theme_icon else ""
+        else:
+            bg_color = "#ffffff"
+            fg_color = "#000000"
+            cursor_color = "#000000"
+            text_select_bg = "#b3d7ff"
+            theme_icon = self.btn_icons.get('moon')
+            theme_btn_text = "🌙" if not theme_icon else ""
+            
+        if hasattr(self, 'theme_btn') and self.theme_btn.winfo_exists():
+            self.theme_btn.config(image=theme_icon, text=theme_btn_text)
+            
+        if hasattr(self, 'log_text') and self.log_text.winfo_exists():
+            self.log_text.config(
+                bg=bg_color,
+                fg=fg_color,
+                insertbackground=cursor_color,
+                selectbackground=text_select_bg
+            )
+            
+        # Re-apply our specific Treeview and button style configurations that sv_ttk might override
+        style = ttk.Style()
+        style.configure("Treeview", font=('', 11), rowheight=38)
+        style.configure("Treeview.Heading", font=('', 11, 'bold'))
+        style.configure('Small.TButton', font=('', 7))
 
     def start_auto_scan(self):
         drives = []
