@@ -62,6 +62,11 @@ O projeto utiliza **GitHub Actions** para automatizar o build e a distribuição
 
 ## 📝 Notas de Versão
 
+- **v1.37.3**: Centralização de todos os códigos de cores hexadecimais em um dicionário unificado (`THEME_COLORS`) utilizando constantes semânticas reutilizáveis. Adicionado redimensionamento padrão maior para a tela (1200x650) e desabilitada temporariamente a troca de tema (fixando o tema escuro/dark por padrão).
+- **v1.37.2**: Ajuste no intervalo de verificação de atualizações automáticas em segundo plano, rodando a cada 1 hora (3.600.000 ms).
+- **v1.37.1**: Correções e melhorias de renderização nos widgets nativos (rótulos transparentes e bordas pretas nos agrupadores) na aplicação do tema claro e escuro.
+- **v1.37.0**: Implementado suporte a temas Claro e Escuro utilizando a biblioteca `sv_ttk` (Sun Valley Theme) com integração visual completa e ícones adaptativos gerados programaticamente.
+- **v1.36.1**: Adicionado botão "Abrir Pasta" no painel de ações para abrir diretamente no Windows Explorer o diretório da instalação selecionada.
 - **v1.36**: Correção definitiva do erro de remoção do diretório temporário (`_MEIPASS`) do PyInstaller no Windows. Ao iniciar subprocessos (como GeneXus ou License Manager), o ambiente é limpo (removendo `_MEIPASS` e limpando o `PATH`) e a diretiva de busca de DLLs (`SetDllDirectoryW`) é temporariamente redefinida para evitar locks indesejados.
 - **v1.35**: Tentativa de correção de travamento no encerramento do processo com `sys.exit(0)`, atualização do PyInstaller e desativação do UPX. Ignorados scripts de implantação locais no repositório.
 - **v1.34**: Ajustes de versão e documentação no histórico do README.
