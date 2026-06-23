@@ -12,7 +12,11 @@ import webbrowser
 from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import sv_ttk
+try:
+    import sv_ttk
+    HAS_SV_THEME = True
+except ImportError:
+    HAS_SV_THEME = False
 
 GITHUB_REPO = "igormenin/GenexusLauncher"
 
@@ -558,7 +562,8 @@ class App(tk.Tk):
 
         self.store = InstallationStore(CONFIG_FILE)
         self.theme = self.store.data.get('theme', 'dark')
-        sv_ttk.set_theme(self.theme)
+        if HAS_SV_THEME:
+            sv_ttk.set_theme(self.theme)
 
         self.log_queue = queue.Queue()
         self.running = False
@@ -884,7 +889,8 @@ class App(tk.Tk):
         else:
             self.theme = "dark"
             
-        sv_ttk.set_theme(self.theme)
+        if HAS_SV_THEME:
+            sv_ttk.set_theme(self.theme)
         self.store.data['theme'] = self.theme
         self.store.save()
         self._apply_theme_non_ttk()
