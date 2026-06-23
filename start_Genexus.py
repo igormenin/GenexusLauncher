@@ -807,12 +807,21 @@ class App(tk.Tk):
         return (not is_frozen) or (username == 'igoragl')
 
     def check_for_updates(self, manual=False):
+        # Evita buscas duplicadas se já encontramos uma atualização e estamos exibindo a tela ou baixando
+        if hasattr(self, 'update_url') and self.update_url:
+            return
+
         if not manual and self.is_dev_env():
             self.log("[Update] Busca automática de atualizações desativada no ambiente de desenvolvimento.")
             self.after(0, self._ask_initial_scan)
             return
+            
         thread = threading.Thread(target=self._check_updates_worker, args=(manual,), daemon=True)
         thread.start()
+        
+        # Se for a busca automática, reagenda a verificação para daqui a 1 hora (3.600.000 ms)
+        if not manual:
+            self.after(3600000, lambda: self.check_for_updates(manual=False))
 
     def _check_updates_worker(self, manual=False):
         def parse_version(v_str):
