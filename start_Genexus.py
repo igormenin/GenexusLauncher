@@ -20,7 +20,99 @@ except ImportError:
 
 GITHUB_REPO = "igormenin/GenexusLauncher"
 
+# Centralized theme and UI color configurations
+# Common Theme Colors
+ACCENT = '#0b5cab'
+GROUP_BORDER = '#000000'
+FALLBACK_WHITE = '#ffffff'
 
+# Dark Theme Colors
+DARK_WINDOW_BG = '#1c1c1c'
+DARK_FG = '#ffffff'
+DARK_LOG_BG = DARK_WINDOW_BG
+DARK_LOG_FG = DARK_FG
+DARK_CURSOR = DARK_FG
+DARK_SELECT_BG = '#0078d4'
+DARK_BTN_BG = '#2d2d2d'
+DARK_BTN_FG = DARK_FG
+DARK_BTN_BORDER = DARK_WINDOW_BG
+DARK_BTN_ACTIVE = '#3d3d3d'
+DARK_BTN_DISABLED = '#202020'
+DARK_DIALOG_BG = '#1e1e1e'
+DARK_DIALOG_FG = 'white'
+DARK_DIALOG_TEXT_BG = DARK_BTN_BG
+DARK_DIALOG_TEXT_FG = '#cccccc'
+DARK_DIALOG_LINK_FG = '#5cacee'
+DARK_DIALOG_INFO_FG = '#888888'
+
+# Light Theme Colors
+LIGHT_WINDOW_BG = '#f0f0f0'
+LIGHT_FG = '#000000'
+LIGHT_LOG_BG = '#ffffff' #'#f3f3f3'
+LIGHT_LOG_FG = LIGHT_FG
+LIGHT_CURSOR = LIGHT_FG
+LIGHT_SELECT_BG = '#0078d7' #'#b3d7ff'
+LIGHT_BTN_BG = '#e1e1e1' #'#e1e1e1'
+LIGHT_BTN_FG = LIGHT_FG
+LIGHT_BTN_BORDER = '#adadad' #'#cccccc'
+LIGHT_BTN_LIGHTCOLOR = '#ffffff'
+LIGHT_BTN_DARKCOLOR = '#cccccc' # '#bbbbbb'
+LIGHT_BTN_ACTIVE = '#e5f1fb' #'#d0d0d0'
+LIGHT_BTN_DISABLED = LIGHT_WINDOW_BG
+LIGHT_DIALOG_BG = LIGHT_WINDOW_BG # '#ffffff'
+LIGHT_DIALOG_FG = 'black'
+LIGHT_DIALOG_TEXT_BG = LIGHT_LOG_BG
+LIGHT_DIALOG_TEXT_FG = LIGHT_DIALOG_FG #'#333333'
+LIGHT_DIALOG_LINK_FG = ACCENT
+LIGHT_DIALOG_INFO_FG = '#838383' # '#666666'
+
+THEME_COLORS = {
+    'common': {
+        'accent': ACCENT,
+        'group_border': GROUP_BORDER,
+        'fallback_white': FALLBACK_WHITE,
+    },
+    'dark': {
+        'window_bg': DARK_WINDOW_BG,
+        'fg': DARK_FG,
+        'log_bg': DARK_LOG_BG,
+        'log_fg': DARK_LOG_FG,
+        'cursor': DARK_CURSOR,
+        'select_bg': DARK_SELECT_BG,
+        'btn_bg': DARK_BTN_BG,
+        'btn_fg': DARK_BTN_FG,
+        'btn_border': DARK_BTN_BORDER,
+        'btn_active': DARK_BTN_ACTIVE,
+        'btn_disabled': DARK_BTN_DISABLED,
+        'dialog_bg': DARK_DIALOG_BG,
+        'dialog_fg': DARK_DIALOG_FG,
+        'dialog_text_bg': DARK_DIALOG_TEXT_BG,
+        'dialog_text_fg': DARK_DIALOG_TEXT_FG,
+        'dialog_link_fg': DARK_DIALOG_LINK_FG,
+        'dialog_info_fg': DARK_DIALOG_INFO_FG,
+    },
+    'light': {
+        'window_bg': LIGHT_WINDOW_BG,
+        'fg': LIGHT_FG,
+        'log_bg': LIGHT_LOG_BG,
+        'log_fg': LIGHT_LOG_FG,
+        'cursor': LIGHT_CURSOR,
+        'select_bg': LIGHT_SELECT_BG,
+        'btn_bg': LIGHT_BTN_BG,
+        'btn_fg': LIGHT_BTN_FG,
+        'btn_border': LIGHT_BTN_BORDER,
+        'btn_lightcolor': LIGHT_BTN_LIGHTCOLOR,
+        'btn_darkcolor': LIGHT_BTN_DARKCOLOR,
+        'btn_active': LIGHT_BTN_ACTIVE,
+        'btn_disabled': LIGHT_BTN_DISABLED,
+        'dialog_bg': LIGHT_DIALOG_BG,
+        'dialog_fg': LIGHT_DIALOG_FG,
+        'dialog_text_bg': LIGHT_DIALOG_TEXT_BG,
+        'dialog_text_fg': LIGHT_DIALOG_TEXT_FG,
+        'dialog_link_fg': LIGHT_DIALOG_LINK_FG,
+        'dialog_info_fg': LIGHT_DIALOG_INFO_FG,
+    }
+}
 
 APP_TITLE = 'GeneXus Launcher'
 # CORREÇÃO: Configuração que funciona com PyInstaller onefile
@@ -235,7 +327,7 @@ class LoadingOverlay(tk.Toplevel):
         # Spinner Canvas
         self.canvas = tk.Canvas(container, width=50, height=50, bg='black', highlightthickness=0)
         self.canvas.pack(pady=10)
-        self.arc = self.canvas.create_arc(5, 5, 45, 45, start=0, extent=120, outline='#0b5cab', width=4, style='arc')
+        self.arc = self.canvas.create_arc(5, 5, 45, 45, start=0, extent=120, outline=THEME_COLORS['common']['accent'], width=4, style='arc')
         
         # Message Label
         tk.Label(container, textvariable=self.message_var, fg='white', bg='black', font=('', 12, 'bold')).pack()
@@ -360,20 +452,13 @@ class UpdateDialog(tk.Toplevel):
         
         # Cores adaptativas baseadas no tema do master
         theme = getattr(master, 'theme', 'dark')
-        if theme == 'dark':
-            bg_color = '#1e1e1e'
-            fg_color = 'white'
-            text_bg = '#2d2d2d'
-            text_fg = '#cccccc'
-            link_fg = '#5cacee'
-            info_fg = '#888888'
-        else:
-            bg_color = '#ffffff'
-            fg_color = 'black'
-            text_bg = '#f3f3f3'
-            text_fg = '#333333'
-            link_fg = '#0b5cab'
-            info_fg = '#666666'
+        colors = THEME_COLORS.get(theme, THEME_COLORS['dark'])
+        bg_color = colors['dialog_bg']
+        fg_color = colors['dialog_fg']
+        text_bg = colors['dialog_text_bg']
+        text_fg = colors['dialog_text_fg']
+        link_fg = colors['dialog_link_fg']
+        info_fg = colors['dialog_info_fg']
 
         self.configure(bg=bg_color)
         
@@ -389,10 +474,10 @@ class UpdateDialog(tk.Toplevel):
             
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-        container = tk.Frame(self, bg=bg_color, padx=30, pady=30, highlightbackground="#0b5cab", highlightthickness=2)
+        container = tk.Frame(self, bg=bg_color, padx=30, pady=30, highlightbackground=THEME_COLORS['common']['accent'], highlightthickness=2)
         container.pack(fill='both', expand=True)
 
-        tk.Label(container, text="Atualização Obrigatória", fg="#0b5cab", bg=bg_color, font=('', 16, 'bold')).pack(pady=(0, 15))
+        tk.Label(container, text="Atualização Obrigatória", fg=THEME_COLORS['common']['accent'], bg=bg_color, font=('', 16, 'bold')).pack(pady=(0, 15))
         tk.Label(container, text=f"Uma nova versão ({version}) está disponível.", fg=fg_color, bg=bg_color, font=('', 11)).pack(pady=(0, 10))
 
         # Lógica de processamento das notas de atualização e commits
@@ -467,7 +552,7 @@ class UpdateDialog(tk.Toplevel):
                             fg=info_fg, bg=bg_color, font=('', 8), justify='center')
         info_lbl.pack(pady=(0, 12))
 
-        self.btn = tk.Button(container, text="INICIAR ATUALIZAÇÃO", bg="#0b5cab", fg="white", font=('', 11, 'bold'), 
+        self.btn = tk.Button(container, text="INICIAR ATUALIZAÇÃO", bg=THEME_COLORS['common']['accent'], fg="white", font=('', 11, 'bold'), 
                              padx=20, pady=10, borderwidth=0, cursor="hand2", command=self.confirm)
         self.btn.pack(pady=(5, 0))
         
@@ -557,11 +642,11 @@ class App(tk.Tk):
         self.app_icon = None
         self._setup_window_icon()
         self.title(APP_TITLE)
-        self.geometry('1040x650')
-        self.minsize(920, 560)
+        self.geometry('1200x650')
+        self.minsize(1000, 560)
 
         self.store = InstallationStore(CONFIG_FILE)
-        self.theme = self.store.data.get('theme', 'dark')
+        self.theme = 'dark'
         if HAS_SV_THEME:
             sv_ttk.set_theme(self.theme)
 
@@ -672,21 +757,21 @@ class App(tk.Tk):
         style.configure("Treeview", font=('', 11), rowheight=38)
         style.configure("Treeview.Heading", font=('', 11, 'bold'))
 
-        left = ttk.LabelFrame(root, text='Instalações', padding=10)
-        left.grid(row=0, column=0, sticky='nsw', padx=(0, 10))
-        left.rowconfigure(0, weight=1)
-        left.columnconfigure(0, weight=1)
+        self.left_frame = tk.LabelFrame(root, text='Instalações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=10, pady=10)
+        self.left_frame.grid(row=0, column=0, sticky='nsw', padx=(0, 10))
+        self.left_frame.rowconfigure(0, weight=1)
+        self.left_frame.columnconfigure(0, weight=1)
 
-        self.tree = ttk.Treeview(left, show='tree', height=24)
+        self.tree = ttk.Treeview(self.left_frame, show='tree', height=24)
         self.tree.column('#0', width=300)
         self.tree.grid(row=0, column=0, sticky='nsew')
         self.tree.bind('<<TreeviewSelect>>', self.on_select)
 
-        tree_scroll = ttk.Scrollbar(left, command=self.tree.yview)
+        tree_scroll = ttk.Scrollbar(self.left_frame, command=self.tree.yview)
         tree_scroll.grid(row=0, column=1, sticky='ns')
         self.tree.configure(yscrollcommand=tree_scroll.set)
 
-        left_buttons = ttk.Frame(left)
+        left_buttons = ttk.Frame(self.left_frame)
         left_buttons.grid(row=1, column=0, columnspan=2, sticky='ew', pady=(10, 0))
         left_buttons.columnconfigure(0, weight=1)
         left_buttons.columnconfigure(1, weight=1)
@@ -721,9 +806,9 @@ class App(tk.Tk):
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
 
-        details = ttk.LabelFrame(right, text='Detalhes e ações', padding=12)
-        details.grid(row=0, column=0, sticky='ew')
-        details.columnconfigure(1, weight=1)
+        self.details_frame = tk.LabelFrame(right, text='Detalhes e ações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=12, pady=12)
+        self.details_frame.grid(row=0, column=0, sticky='ew')
+        self.details_frame.columnconfigure(1, weight=1)
 
         self.name_value = tk.StringVar(value='-')
         self.path_value = tk.StringVar(value='-')
@@ -731,18 +816,18 @@ class App(tk.Tk):
         self.com_value = tk.StringVar(value='-')
         self.lmgr_path_value = tk.StringVar(value='-')
 
-        ttk.Label(details, text='Nome:').grid(row=0, column=0, sticky='w', pady=2)
-        ttk.Label(details, textvariable=self.name_value).grid(row=0, column=1, sticky='w', pady=2)
-        ttk.Label(details, text='Pasta:').grid(row=1, column=0, sticky='nw', pady=2)
-        ttk.Label(details, textvariable=self.path_value, wraplength=640).grid(row=1, column=1, sticky='w', pady=2)
-        ttk.Label(details, text='genexus.exe:').grid(row=2, column=0, sticky='w', pady=2)
-        ttk.Label(details, textvariable=self.exe_value, wraplength=640).grid(row=2, column=1, sticky='w', pady=2)
-        ttk.Label(details, text='genexus.com:').grid(row=3, column=0, sticky='w', pady=2)
-        ttk.Label(details, textvariable=self.com_value, wraplength=640).grid(row=3, column=1, sticky='w', pady=2)
-        ttk.Label(details, text='GxLMgr.exe:').grid(row=4, column=0, sticky='w', pady=2)
-        ttk.Label(details, textvariable=self.lmgr_path_value, wraplength=640).grid(row=4, column=1, sticky='w', pady=2)
+        tk.Label(self.details_frame, text='Nome:', font=('', 10)).grid(row=0, column=0, sticky='w', pady=2)
+        tk.Label(self.details_frame, textvariable=self.name_value, font=('', 10)).grid(row=0, column=1, sticky='w', pady=2)
+        tk.Label(self.details_frame, text='Pasta:', font=('', 10)).grid(row=1, column=0, sticky='nw', pady=2)
+        tk.Label(self.details_frame, textvariable=self.path_value, font=('', 10), wraplength=640, justify='left').grid(row=1, column=1, sticky='w', pady=2)
+        tk.Label(self.details_frame, text='genexus.exe:', font=('', 10)).grid(row=2, column=0, sticky='w', pady=2)
+        tk.Label(self.details_frame, textvariable=self.exe_value, font=('', 10), wraplength=640, justify='left').grid(row=2, column=1, sticky='w', pady=2)
+        tk.Label(self.details_frame, text='genexus.com:', font=('', 10)).grid(row=3, column=0, sticky='w', pady=2)
+        tk.Label(self.details_frame, textvariable=self.com_value, font=('', 10), wraplength=640, justify='left').grid(row=3, column=1, sticky='w', pady=2)
+        tk.Label(self.details_frame, text='GxLMgr.exe:', font=('', 10)).grid(row=4, column=0, sticky='w', pady=2)
+        tk.Label(self.details_frame, textvariable=self.lmgr_path_value, font=('', 10), wraplength=640, justify='left').grid(row=4, column=1, sticky='w', pady=2)
 
-        actions = ttk.Frame(details)
+        actions = ttk.Frame(self.details_frame)
         actions.grid(row=5, column=0, columnspan=2, sticky='w', pady=(12, 0))
         self.clean_open_btn = ttk.Button(actions, text='Limpar e iniciar GeneXus', command=self.prepare_and_open_selected)
         self.clean_open_btn.grid(row=0, column=0, padx=(0, 8))
@@ -755,22 +840,22 @@ class App(tk.Tk):
         self.check_btn = ttk.Button(actions, text='Validar Instância', command=self.check_selected_instance)
         self.check_btn.grid(row=0, column=4, padx=(8, 0))
 
-        log_frame = ttk.LabelFrame(right, text='Log', padding=10)
-        log_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
+        self.log_frame = tk.LabelFrame(right, text='Log', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=10, pady=10)
+        self.log_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
+        self.log_frame.columnconfigure(0, weight=1)
+        self.log_frame.rowconfigure(0, weight=1)
 
-        self.log_text = tk.Text(log_frame, wrap='word', height=18, state='disabled')
+        self.log_text = tk.Text(self.log_frame, wrap='word', height=18, state='disabled')
         self.log_text.grid(row=0, column=0, sticky='nsew')
-        scrollbar = ttk.Scrollbar(log_frame, command=self.log_text.yview)
+        scrollbar = ttk.Scrollbar(self.log_frame, command=self.log_text.yview)
         scrollbar.grid(row=0, column=1, sticky='ns')
         self.log_text.config(yscrollcommand=scrollbar.set)
 
         footer_frame = ttk.Frame(root)
         footer_frame.grid(row=1, column=1, sticky='e', pady=(6, 0))
 
-        footer = ttk.Label(footer_frame, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), foreground='gray')
-        footer.pack(side='left', padx=(0, 10))
+        self.footer_label = tk.Label(footer_frame, text=f"Desenvolvido por Igor Menin - v{self._get_version()}", font=('', 8), fg='gray')
+        self.footer_label.pack(side='left', padx=(0, 10))
 
         self.manual_update_btn = ttk.Button(footer_frame, text="Verificar Atualização", 
                                             command=lambda: self.check_for_updates(manual=True), 
@@ -782,11 +867,11 @@ class App(tk.Tk):
                                     style='Small.TButton', image=self.btn_icons.get('info'), compound='left')
         self.about_btn.pack(side='left', padx=(4, 0))
 
-        # Botão de alternar tema posicionado bem à esquerda da linha do rodapé
-        self.theme_btn = ttk.Button(root, image='', 
-                                    command=self.toggle_theme, 
-                                    style='Small.TButton')
-        self.theme_btn.grid(row=1, column=0, sticky='w', pady=(6, 0))
+        # Botão de alternar tema desabilitado por enquanto
+        # self.theme_btn = ttk.Button(root, image='', 
+        #                             command=self.toggle_theme, 
+        #                             style='Small.TButton')
+        # self.theme_btn.grid(row=1, column=0, sticky='w', pady=(6, 0))
 
         # Estilo para o botão do rodapé ficar menor
         style.configure('Small.TButton', font=('', 7))
@@ -905,20 +990,70 @@ class App(tk.Tk):
         self._apply_theme_non_ttk()
 
     def _apply_theme_non_ttk(self):
+        style = ttk.Style()
+        
+        colors = THEME_COLORS.get(self.theme, THEME_COLORS['dark'])
+        window_bg = colors['window_bg']
+        fg_color = colors['fg']
+        bg_color = colors['log_bg']
+        cursor_color = colors['cursor']
+        text_select_bg = colors['select_bg']
+        
+        # Configura cor de fundo da janela de acordo com o tema
+        self.configure(bg=window_bg)
+        style.configure('TFrame', background=window_bg)
+        
         if self.theme == "dark":
-            bg_color = "#1c1c1c"
-            fg_color = "#ffffff"
-            cursor_color = "#ffffff"
-            text_select_bg = "#0078d4"
             theme_icon = self.btn_icons.get('sun')
             theme_btn_text = "☀️" if not theme_icon else ""
+            
+            # Restaura o layout padrão do sv_ttk escuro para os botões
+            style.layout('TButton', [
+                ('Button.button', {'sticky': 'nswe', 'children': [
+                    ('Button.padding', {'sticky': 'nswe', 'children': [
+                        ('Button.label', {'expand': '1', 'sticky': 'nswe'})
+                    ]})
+                ]})
+            ])
+            
+            # Configurações de cores nativas do sv_ttk escuro
+            style.configure('TButton', background=colors['btn_bg'], foreground=colors['btn_fg'], bordercolor=colors['btn_border'])
+            style.map('TButton', background=[('active', colors['btn_active']), ('disabled', colors['btn_disabled'])])
         else:
-            bg_color = "#ffffff"
-            fg_color = "#000000"
-            cursor_color = "#000000"
-            text_select_bg = "#b3d7ff"
             theme_icon = self.btn_icons.get('moon')
             theme_btn_text = "🌙" if not theme_icon else ""
+            
+            # Altera o layout do TButton no modo claro para usar elementos planos (permitindo cor sólida cinza)
+            style.layout('TButton', [
+                ('Button.border', {'sticky': 'nswe', 'border': '1', 'children': [
+                    ('Button.focus', {'sticky': 'nswe', 'children': [
+                        ('Button.padding', {'sticky': 'nswe', 'children': [
+                            ('Button.label', {'expand': '1', 'sticky': 'nswe'})
+                        ]})
+                    ]})
+                ]})
+            ])
+            
+            # Configura botões Ttk com fundo cinza no modo claro
+            style.configure('TButton', 
+                            background=colors['btn_bg'], 
+                            foreground=colors['btn_fg'], 
+                            bordercolor=colors['btn_border'], 
+                            lightcolor=colors['btn_lightcolor'], 
+                            darkcolor=colors['btn_darkcolor'])
+            style.map('TButton', background=[('active', colors['btn_active']), ('disabled', colors['btn_disabled'])])
+            
+        # Configura os tk.LabelFrame e tk.Label usando a cor de fundo da janela (window_bg)
+        group_border = THEME_COLORS['common']['group_border']
+        if hasattr(self, 'left_frame') and self.left_frame.winfo_exists():
+            self.left_frame.config(bg=window_bg, fg=fg_color, highlightbackground=group_border)
+        if hasattr(self, 'details_frame') and self.details_frame.winfo_exists():
+            self.details_frame.config(bg=window_bg, fg=fg_color, highlightbackground=group_border)
+            for child in self.details_frame.winfo_children():
+                if isinstance(child, tk.Label):
+                    child.config(bg=window_bg, fg=fg_color)
+        if hasattr(self, 'log_frame') and self.log_frame.winfo_exists():
+            self.log_frame.config(bg=window_bg, fg=fg_color, highlightbackground=group_border)
             
         if hasattr(self, 'theme_btn') and self.theme_btn.winfo_exists():
             self.theme_btn.config(image=theme_icon, text=theme_btn_text)
@@ -931,8 +1066,10 @@ class App(tk.Tk):
                 selectbackground=text_select_bg
             )
             
+        if hasattr(self, 'footer_label') and self.footer_label.winfo_exists():
+            self.footer_label.config(bg=window_bg)
+            
         # Re-apply our specific Treeview and button style configurations that sv_ttk might override
-        style = ttk.Style()
         style.configure("Treeview", font=('', 11), rowheight=38)
         style.configure("Treeview.Heading", font=('', 11, 'bold'))
         style.configure('Small.TButton', font=('', 7))
@@ -1071,9 +1208,9 @@ del "%~f0"
     def _create_fallback_icon(self):
 
         img = tk.PhotoImage(width=24, height=24)
-        img.put('#0b5cab', to=(0, 0, 23, 23))
-        img.put('#ffffff', to=(4, 4, 19, 19))
-        img.put('#0b5cab', to=(8, 8, 15, 15))
+        img.put(THEME_COLORS['common']['accent'], to=(0, 0, 23, 23))
+        img.put(THEME_COLORS['common']['fallback_white'], to=(4, 4, 19, 19))
+        img.put(THEME_COLORS['common']['accent'], to=(8, 8, 15, 15))
         return img
 
     def _icon_for_item(self, item):
