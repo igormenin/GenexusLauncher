@@ -44,6 +44,7 @@ DARK_DIALOG_TEXT_BG = DARK_BTN_BG
 DARK_DIALOG_TEXT_FG = '#cccccc'
 DARK_DIALOG_LINK_FG = '#5cacee'
 DARK_DIALOG_INFO_FG = '#888888'
+DARK_GROUP_BORDER = DARK_DIALOG_INFO_FG
 
 # Light Theme Colors
 LIGHT_WINDOW_BG = '#f0f0f0'
@@ -65,14 +66,16 @@ LIGHT_DIALOG_TEXT_BG = LIGHT_LOG_BG
 LIGHT_DIALOG_TEXT_FG = LIGHT_DIALOG_FG #'#333333'
 LIGHT_DIALOG_LINK_FG = ACCENT
 LIGHT_DIALOG_INFO_FG = '#838383' # '#666666'
+LIGHT_GROUP_BORDER = LIGHT_DIALOG_INFO_FG
 
 THEME_COLORS = {
     'common': {
         'accent': ACCENT,
-        'group_border': GROUP_BORDER,
         'fallback_white': FALLBACK_WHITE,
+        'group_border': GROUP_BORDER,
     },
     'dark': {
+        'group_border': DARK_GROUP_BORDER,
         'window_bg': DARK_WINDOW_BG,
         'fg': DARK_FG,
         'log_bg': DARK_LOG_BG,
@@ -92,6 +95,7 @@ THEME_COLORS = {
         'dialog_info_fg': DARK_DIALOG_INFO_FG,
     },
     'light': {
+        'group_border': LIGHT_GROUP_BORDER,
         'window_bg': LIGHT_WINDOW_BG,
         'fg': LIGHT_FG,
         'log_bg': LIGHT_LOG_BG,
@@ -757,7 +761,7 @@ class App(tk.Tk):
         style.configure("Treeview", font=('', 11), rowheight=38)
         style.configure("Treeview.Heading", font=('', 11, 'bold'))
 
-        self.left_frame = tk.LabelFrame(root, text='Instalações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=10, pady=10)
+        self.left_frame = tk.LabelFrame(root, text='Instalações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS[self.theme]['group_border'], highlightthickness=1, padx=10, pady=10)
         self.left_frame.grid(row=0, column=0, sticky='nsw', padx=(0, 10))
         self.left_frame.rowconfigure(0, weight=1)
         self.left_frame.columnconfigure(0, weight=1)
@@ -806,7 +810,7 @@ class App(tk.Tk):
         right.columnconfigure(0, weight=1)
         right.rowconfigure(1, weight=1)
 
-        self.details_frame = tk.LabelFrame(right, text='Detalhes e ações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=12, pady=12)
+        self.details_frame = tk.LabelFrame(right, text='Detalhes e ações', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS[self.theme]['group_border'], highlightthickness=1, padx=12, pady=12)
         self.details_frame.grid(row=0, column=0, sticky='ew')
         self.details_frame.columnconfigure(1, weight=1)
 
@@ -840,7 +844,7 @@ class App(tk.Tk):
         self.check_btn = ttk.Button(actions, text='Validar Instância', command=self.check_selected_instance)
         self.check_btn.grid(row=0, column=4, padx=(8, 0))
 
-        self.log_frame = tk.LabelFrame(right, text='Log', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS['common']['group_border'], highlightthickness=1, padx=10, pady=10)
+        self.log_frame = tk.LabelFrame(right, text='Log', font=('', 11, 'bold'), bd=0, highlightbackground=THEME_COLORS[self.theme]['group_border'], highlightthickness=1, padx=10, pady=10)
         self.log_frame.grid(row=1, column=0, sticky='nsew', pady=(10, 0))
         self.log_frame.columnconfigure(0, weight=1)
         self.log_frame.rowconfigure(0, weight=1)
@@ -1044,7 +1048,7 @@ class App(tk.Tk):
             style.map('TButton', background=[('active', colors['btn_active']), ('disabled', colors['btn_disabled'])])
             
         # Configura os tk.LabelFrame e tk.Label usando a cor de fundo da janela (window_bg)
-        group_border = THEME_COLORS['common']['group_border']
+        group_border = colors['group_border']
         if hasattr(self, 'left_frame') and self.left_frame.winfo_exists():
             self.left_frame.config(bg=window_bg, fg=fg_color, highlightbackground=group_border)
         if hasattr(self, 'details_frame') and self.details_frame.winfo_exists():
