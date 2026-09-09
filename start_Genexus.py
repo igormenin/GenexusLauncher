@@ -131,7 +131,17 @@ else:
 # Cria diretório se não existir
 CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
 DEFAULT_OPEN_ARGS = ['/nolastkb', '/measurecommandtime', '/IdeStyle:silver']
+IDE_STYLE_OPTIONS = ['silver', 'blue', 'black', 'red']
 GXMODULES_PATH = Path.home() / '.gxmodules'
+
+
+def _parse_idestyle(arg: str) -> str:
+    """Extrai o valor do tema de um argumento /IdeStyle:<valor>."""
+    if arg and ':' in arg:
+        return arg.split(':', 1)[1].strip().lower() or 'silver'
+    return 'silver'
+
+
 
 
 def center_window(window, parent=None):
@@ -234,29 +244,117 @@ class InstallationDialog(tk.Toplevel):
 
         initial = initial or {}
 
+        # Determina se é um cadastro novo (sem open_args) ou edição existente
+        existing_args = initial.get('open_args')
+        is_new = existing_args is None
+        args_lower = [a.lower() for a in (existing_args or [])]
+
+        # --- Variáveis individuais por parâmetro ---
         self.name_var = tk.StringVar(value=initial.get('name', ''))
         self.path_var = tk.StringVar(value=initial.get('path', ''))
-        self.ide_style_var = tk.StringVar(value=initial.get('ide_style', 'silver'))
-        self.args_var = tk.StringVar(value=' '.join(initial.get('open_args', DEFAULT_OPEN_ARGS)))
 
+        # /NoLastKB — novo cadastro começa desmarcado
+        self.no_last_kb_var = tk.BooleanVar(
+            value=False if is_new else any(a == '/nolastkb' for a in args_lower)
+        )
+
+        # /MeasureCommandTime — novo cadastro começa desmarcado
+        self.measure_time_var = tk.BooleanVar(
+            value=False if is_new else any(a == '/measurecommandtime' for a in args_lower)
+        )
+
+        # /IdeStyle — detecta se está em uso e qual valor
+        ide_arg = None if is_new else next(
+            (a for a in (existing_args or []) if a.lower().startswith('/idestyle')), None
+        )
+        self.ide_style_enabled_var = tk.BooleanVar(value=ide_arg is not None)
+        self.ide_style_value_var = tk.StringVar(
+            value=_parse_idestyle(ide_arg) if ide_arg else 'silver'
+        )
+
+        # Outro (campo livre) — argumentos que não são nenhum dos três acima
+        known_prefixes = ('/nolastkb', '/measurecommandtime', '/idestyle')
+        other_arg = None if is_new else next(
+            (a for a in (existing_args or []) if not a.lower().startswith(known_prefixes)), None
+        )
+        self.other_var = tk.BooleanVar(value=other_arg is not None)
+        self.other_text_var = tk.StringVar(value=other_arg or '')
+
+        # --- Layout ---
         body = ttk.Frame(self, padding=14)
         body.grid(sticky='nsew')
 
         ttk.Label(body, text='Nome').grid(row=0, column=0, sticky='w', pady=(0, 4))
-        ttk.Entry(body, textvariable=self.name_var, width=42).grid(row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        ttk.Entry(body, textvariable=self.name_var, width=48).grid(
+            row=1, column=0, columnspan=2, sticky='ew', pady=(0, 10)
+        )
 
         ttk.Label(body, text='Pasta do GeneXus').grid(row=2, column=0, sticky='w', pady=(0, 4))
-        ttk.Entry(body, textvariable=self.path_var, width=42).grid(row=3, column=0, sticky='ew', pady=(0, 10))
-        ttk.Button(body, text='Procurar', command=self.browse).grid(row=3, column=1, padx=(8, 0), pady=(0, 10))
+        ttk.Entry(body, textvariable=self.path_var, width=48).grid(
+            row=3, column=0, sticky='ew', pady=(0, 10)
+        )
+        ttk.Button(body, text='Procurar', command=self.browse).grid(
+            row=3, column=1, padx=(8, 0), pady=(0, 10)
+        )
 
-        ttk.Label(body, text='IdeStyle').grid(row=4, column=0, sticky='w', pady=(0, 4))
-        ttk.Entry(body, textvariable=self.ide_style_var, width=42).grid(row=5, column=0, columnspan=2, sticky='ew', pady=(0, 10))
+        # --- Grupo de parâmetros de inicialização ---
+        params_frame = ttk.LabelFrame(body, text='Parâmetros de inicialização', padding=(10, 6))
+        params_frame.grid(row=4, column=0, columnspan=2, sticky='ew', pady=(4, 12))
+        params_frame.columnconfigure(1, weight=1)
 
-        ttk.Label(body, text='Argumentos de abertura').grid(row=6, column=0, sticky='w', pady=(0, 4))
-        ttk.Entry(body, textvariable=self.args_var, width=42).grid(row=7, column=0, columnspan=2, sticky='ew', pady=(0, 12))
+        # /NoLastKB
+        ttk.Checkbutton(
+            params_frame,
+            text='/NoLastKB  — não abre a última KB automaticamente',
+            variable=self.no_last_kb_var,
+        ).grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, 4))
 
+        # /MeasureCommandTime
+        ttk.Checkbutton(
+            params_frame,
+            text='/MeasureCommandTime  — registra timestamps no output',
+            variable=self.measure_time_var,
+        ).grid(row=1, column=0, columnspan=3, sticky='w', pady=(0, 4))
+
+        # /IdeStyle + combobox
+        self.ide_style_cb = ttk.Checkbutton(
+            params_frame,
+            text='/IdeStyle',
+            variable=self.ide_style_enabled_var,
+            command=self._toggle_idestyle,
+        )
+        self.ide_style_cb.grid(row=2, column=0, sticky='w', pady=(0, 4))
+
+        self.ide_style_combo = ttk.Combobox(
+            params_frame,
+            textvariable=self.ide_style_value_var,
+            values=IDE_STYLE_OPTIONS,
+            state='readonly',
+            width=10,
+        )
+        self.ide_style_combo.grid(row=2, column=1, sticky='w', padx=(6, 0), pady=(0, 4))
+        self._toggle_idestyle()  # aplica estado inicial
+
+        # Outro (campo livre)
+        self.other_cb = ttk.Checkbutton(
+            params_frame,
+            text='Outro:',
+            variable=self.other_var,
+            command=self._toggle_other,
+        )
+        self.other_cb.grid(row=3, column=0, sticky='w', pady=(4, 0))
+
+        self.other_entry = ttk.Entry(
+            params_frame,
+            textvariable=self.other_text_var,
+            width=36,
+        )
+        self.other_entry.grid(row=3, column=1, columnspan=2, sticky='ew', padx=(6, 0), pady=(4, 0))
+        self._toggle_other()  # aplica estado inicial
+
+        # --- Botões ---
         buttons = ttk.Frame(body)
-        buttons.grid(row=8, column=0, columnspan=2, sticky='e')
+        buttons.grid(row=5, column=0, columnspan=2, sticky='e')
         ttk.Button(buttons, text='Cancelar', command=self.destroy).pack(side='right')
         ttk.Button(buttons, text='Salvar', command=self.on_save).pack(side='right', padx=(0, 8))
 
@@ -265,6 +363,35 @@ class InstallationDialog(tk.Toplevel):
         self.protocol('WM_DELETE_WINDOW', self.destroy)
         self.update_idletasks()
         center_window(self, master)
+
+    def _toggle_idestyle(self):
+        """Habilita/desabilita o combobox de tema conforme o checkbox /IdeStyle."""
+        if self.ide_style_enabled_var.get():
+            self.ide_style_combo.configure(state='readonly')
+        else:
+            self.ide_style_combo.configure(state='disabled')
+
+    def _toggle_other(self):
+        """Habilita/desabilita o campo livre conforme o checkbox Outro."""
+        if self.other_var.get():
+            self.other_entry.configure(state='normal')
+        else:
+            self.other_entry.configure(state='disabled')
+
+    def _build_open_args(self) -> list:
+        """Monta a lista de open_args a partir dos checkboxes."""
+        args = []
+        if self.no_last_kb_var.get():
+            args.append('/nolastkb')
+        if self.measure_time_var.get():
+            args.append('/measurecommandtime')
+        if self.ide_style_enabled_var.get():
+            args.append(f'/IdeStyle:{self.ide_style_value_var.get()}')
+        if self.other_var.get():
+            extra = self.other_text_var.get().strip()[:100]
+            if extra:
+                args.append(extra)
+        return args
 
     def browse(self):
         selected = filedialog.askdirectory(title='Selecione a pasta do GeneXus')
@@ -276,9 +403,7 @@ class InstallationDialog(tk.Toplevel):
     def on_save(self):
         gx_path = Path(self.path_var.get().strip())
         name = self.name_var.get().strip()
-        ide_style = self.ide_style_var.get().strip() or 'silver'
-        raw_args = self.args_var.get().strip()
-        open_args = raw_args.split() if raw_args else DEFAULT_OPEN_ARGS
+        open_args = self._build_open_args()
 
         if not name:
             messagebox.showerror(APP_TITLE, 'Informe um nome para a instalação.')
@@ -300,15 +425,14 @@ class InstallationDialog(tk.Toplevel):
         self.result = {
             'name': name,
             'path': str(gx_path),
-            'ide_style': ide_style,
             'open_args': open_args,
         }
-        
+
         # Extrai o ícone agora para salvar no JSON
         icon_data = self.master._extract_icon_data(gx_path / 'genexus.exe')
         if icon_data:
             self.result['icon_data'] = icon_data
-            
+
         self.destroy()
 
 
@@ -1142,7 +1266,6 @@ class App(tk.Tk):
                 item = {
                     'name': dialog.result,
                     'path': str(path),
-                    'ide_style': 'silver',
                     'open_args': DEFAULT_OPEN_ARGS
                 }
                 # Extrai ícone
