@@ -130,6 +130,8 @@ else:
 
 # Cria diretório se não existir
 CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+LOG_FILE = CONFIG_FILE.parent / "gxlauncher.log"
+LOG_EMAIL = "igormenin@gmail.com"
 DEFAULT_OPEN_ARGS = ['/nolastkb', '/measurecommandtime', '/IdeStyle:silver']
 IDE_STYLE_OPTIONS = ['silver', 'blue', 'black', 'red']
 GXMODULES_PATH = Path.home() / '.gxmodules'
@@ -779,6 +781,8 @@ class App(tk.Tk):
             sv_ttk.set_theme(self.theme)
 
         self.log_queue = queue.Queue()
+        self.log_lines = []  # buffer em memória de todas as linhas de log
+        self._init_log_file()
         self.running = False
         self.current_process = None
         self.installation_icons = {}
@@ -832,7 +836,8 @@ class App(tk.Tk):
             'edit': 'edit.png',
             'info': 'botao-de-informacao.png',
             'sun': 'sun.png',
-            'moon': 'moon.png'
+            'moon': 'moon.png',
+            'log': 'log.png',
         }
 
 
@@ -990,6 +995,11 @@ class App(tk.Tk):
                                             style='Small.TButton', image=self.btn_icons.get('update'), compound='left')
         self.manual_update_btn.pack(side='left')
 
+        self.logs_btn = ttk.Button(footer_frame, text=" Logs",
+                                   command=self.show_log_viewer,
+                                   style='Small.TButton', image=self.btn_icons.get('log'), compound='left')
+        self.logs_btn.pack(side='left', padx=(4, 0))
+
         self.about_btn = ttk.Button(footer_frame, text=" Sobre", 
                                     command=self.show_about, 
                                     style='Small.TButton', image=self.btn_icons.get('info'), compound='left')
@@ -1105,6 +1115,102 @@ class App(tk.Tk):
         dialog = AboutDialog(self)
         self.wait_window(dialog)
 
+    def _init_log_file(self):
+        """Inicializa o arquivo de log com cabeçalho de sessão."""
+        try:
+            import datetime
+            with open(LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(f"\n{'='*60}\n")
+                f.write(f"SESSÃO INICIADA: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Versão: {self._get_version()}\n")
+                f.write(f"{'='*60}\n")
+        except Exception:
+            pass
+
+    def show_log_viewer(self):
+        """Abre modal interno exibindo o conteúdo completo do arquivo de log."""
+        dialog = tk.Toplevel(self)
+        dialog.title("Visualizador de Log — GeneXus Launcher")
+        dialog.resizable(True, True)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.geometry("800x520")
+
+        # --- Área de texto com scrollbar ---
+        frame = ttk.Frame(dialog, padding=(10, 10, 10, 6))
+        frame.pack(fill='both', expand=True)
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+
+        text_area = tk.Text(frame, wrap='word', state='disabled', font=('Consolas', 9))
+        text_area.grid(row=0, column=0, sticky='nsew')
+        sb = ttk.Scrollbar(frame, command=text_area.yview)
+        sb.grid(row=0, column=1, sticky='ns')
+        text_area.config(yscrollcommand=sb.set)
+
+        # Carrega conteúdo do arquivo de log
+        log_content = ""
+        try:
+            if LOG_FILE.exists():
+                log_content = LOG_FILE.read_text(encoding='utf-8')
+            else:
+                log_content = "(Nenhum arquivo de log encontrado ainda.)"
+        except Exception as e:
+            log_content = f"(Erro ao ler arquivo de log: {e})"
+
+        text_area.config(state='normal')
+        text_area.insert('1.0', log_content)
+        text_area.config(state='disabled')
+        text_area.see(tk.END)
+
+        # --- Rodapé com botões ---
+        btn_frame = ttk.Frame(dialog, padding=(10, 0, 10, 10))
+        btn_frame.pack(fill='x')
+
+        path_label = ttk.Label(btn_frame, text=f"Arquivo: {LOG_FILE}", font=('', 7), foreground='gray')
+        path_label.pack(side='left', anchor='w')
+
+        def _download_log():
+            from tkinter import filedialog
+            dest = filedialog.asksaveasfilename(
+                parent=dialog,
+                title="Salvar arquivo de log",
+                defaultextension=".txt",
+                filetypes=[("Arquivo de texto", "*.txt"), ("Todos os arquivos", "*.*")],
+                initialfile="gxlauncher_log.txt",
+            )
+            if dest:
+                try:
+                    import shutil
+                    shutil.copy2(str(LOG_FILE), dest)
+                    messagebox.showinfo(APP_TITLE, f"Log salvo em:\n{dest}", parent=dialog)
+                except Exception as e:
+                    messagebox.showerror(APP_TITLE, f"Erro ao salvar:\n{e}", parent=dialog)
+
+        def _send_email_log():
+            try:
+                import urllib.parse
+                subject = urllib.parse.quote(f"GeneXus Launcher — Log de suporte (v{self._get_version()})")
+                body_preview = log_content[-3000:] if len(log_content) > 3000 else log_content
+                body = urllib.parse.quote(
+                    f"Olá Igor,\n\nSegue o log do GeneXus Launcher para análise.\n\n"
+                    f"--- LOG ---\n{body_preview}\n\n"
+                    f"Arquivo completo: {LOG_FILE}"
+                )
+                mailto = f"mailto:{LOG_EMAIL}?subject={subject}&body={body}"
+                webbrowser.open(mailto)
+            except Exception as e:
+                messagebox.showerror(APP_TITLE, f"Não foi possível abrir o cliente de e-mail:\n{e}", parent=dialog)
+
+        right_btns = ttk.Frame(btn_frame)
+        right_btns.pack(side='right')
+
+        ttk.Button(right_btns, text="Fechar", command=dialog.destroy).pack(side='right')
+        ttk.Button(right_btns, text="📧 Enviar por E-mail", command=_send_email_log).pack(side='right', padx=(0, 6))
+        ttk.Button(right_btns, text="⬇ Baixar .txt", command=_download_log).pack(side='right', padx=(0, 6))
+
+        center_window(dialog, self)
+
     def toggle_theme(self):
         if self.theme == "dark":
             self.theme = "light"
@@ -1203,9 +1309,9 @@ class App(tk.Tk):
         style.configure('Small.TButton', font=('', 7))
 
     def start_auto_scan(self):
+        self.log("[Scan] Botão 'Buscar Instalações' acionado.")
         drives = []
         try:
-            # Obtém drives no Windows
             import string
             from ctypes import windll
             bitmask = windll.kernel32.GetLogicalDrives()
@@ -1213,53 +1319,82 @@ class App(tk.Tk):
                 if bitmask & 1:
                     drives.append(f"{letter}:\\")
                 bitmask >>= 1
-        except Exception:
+            self.log(f"[Scan] Drives detectados: {', '.join(drives) if drives else 'nenhum'}")
+        except Exception as e:
+            self.log(f"[Scan] Erro ao detectar drives: {e}. Usando C:\\ como fallback.")
             drives = ["C:\\"]
 
         if not drives:
+            self.log("[Scan] Nenhum drive disponível. Operação cancelada.")
             return
 
         selected_drive = drives[0]
         if len(drives) > 1:
+            self.log(f"[Scan] Múltiplos drives disponíveis. Exibindo diálogo de seleção.")
             dialog = DriveSelectionDialog(self, drives)
             self.wait_window(dialog)
             if not dialog.result:
+                self.log("[Scan] Usuário cancelou a seleção de drive.")
                 return
             selected_drive = dialog.result
+            self.log(f"[Scan] Drive selecionado pelo usuário: {selected_drive}")
+        else:
+            self.log(f"[Scan] Apenas um drive disponível. Usando automaticamente: {selected_drive}")
 
+        self.log(f"[Scan] Iniciando varredura em: {selected_drive}")
         self.show_loading(f"Buscando instalações em {selected_drive}...\n(Isto pode levar alguns minutos)")
         thread = threading.Thread(target=self._auto_scan_worker, args=(selected_drive,), daemon=True)
         thread.start()
 
     def _auto_scan_worker(self, root_path):
+        self.log(f"[Scan] Worker iniciado. Caminho raiz: {root_path}")
         found_paths = []
         ignore_folders = {'windows', '$recycle.bin', 'users', 'usuários', 'system volume information', 'programdata', 'temp'}
-        
+        scanned_dirs = 0
+        skipped_dirs = 0
+
         try:
             for root, dirs, files in os.walk(root_path):
-                # Filtra pastas ignoradas para não descer nelas
+                scanned_dirs += 1
+                # Filtra pastas ignoradas
+                original_count = len(dirs)
                 dirs[:] = [d for d in dirs if d.lower() not in ignore_folders]
-                
-                if 'genexus.exe' in [f.lower() for f in files]:
-                    # Verifica se também tem o gxlmgr.exe
-                    if 'gxlmgr.exe' in [f.lower() for f in files]:
-                        found_paths.append(Path(root))
-        except Exception as e:
-            self.log(f"Erro durante a varredura: {e}")
+                skipped_dirs += original_count - len(dirs)
 
+                files_lower = [f.lower() for f in files]
+                if 'genexus.exe' in files_lower:
+                    if 'gxlmgr.exe' in files_lower:
+                        self.log(f"[Scan] ✔ Instalação válida encontrada: {root}")
+                        found_paths.append(Path(root))
+                    else:
+                        self.log(f"[Scan] ⚠ genexus.exe encontrado em '{root}', mas gxlmgr.exe ausente — ignorado.")
+
+        except PermissionError as e:
+            self.log(f"[Scan] Sem permissão para acessar pasta: {e}")
+        except Exception as e:
+            self.log(f"[Scan] Erro durante a varredura: {e}")
+
+        self.log(f"[Scan] Varredura concluída. Pastas verificadas: {scanned_dirs} | ignoradas: {skipped_dirs} | instalações encontradas: {len(found_paths)}")
         self.after(0, self.hide_loading)
         if not found_paths:
+            self.log("[Scan] Nenhuma instalação válida encontrada. Exibindo aviso ao usuário.")
             self.after(0, lambda: messagebox.showinfo(APP_TITLE, "Nenhuma instalação válida foi encontrada."))
         else:
+            self.log(f"[Scan] {len(found_paths)} instalação(ões) encontrada(s). Iniciando nomeação sequencial.")
             self.after(0, lambda: self._ask_names_sequential(found_paths))
 
     def _ask_names_sequential(self, paths):
+        self.log(f"[Scan] Iniciando nomeação sequencial de {len(paths)} instalação(ões).")
         added_count = 0
+        skipped_count = 0
         for path in paths:
-            # Verifica se já está cadastrado
+            # Verifica duplicata
             if any(os.path.realpath(inst['path']).lower() == os.path.realpath(path).lower() for inst in self.store.get_all()):
+                self.log(f"[Scan] Ignorado (já cadastrado): {path}")
+                skipped_count += 1
                 continue
-                
+
+            self.log(f"[Scan] Exibindo diálogo de nomeação para: {path}")
             dialog = NamingDialog(self, path)
             self.wait_window(dialog)
             if dialog.result:
@@ -1272,10 +1407,17 @@ class App(tk.Tk):
                 icon_data = self._extract_icon_data(path / 'genexus.exe')
                 if icon_data:
                     item['icon_data'] = icon_data
-                
+                    self.log(f"[Scan] Ícone extraído com sucesso para: {dialog.result}")
+                else:
+                    self.log(f"[Scan] Ícone não encontrado para: {dialog.result}")
+
                 self.store.add(item)
+                self.log(f"[Scan] Instalação cadastrada: '{dialog.result}' em {path}")
                 added_count += 1
-        
+            else:
+                self.log(f"[Scan] Usuário cancelou o nomeação para: {path}")
+
+        self.log(f"[Scan] Nomeação concluída. Adicionadas: {added_count} | Puladas (já cadastradas): {skipped_count}")
         if added_count > 0:
             self._load_installations()
             messagebox.showinfo(APP_TITLE, f"Sucesso! {added_count} instalações foram adicionadas.")
@@ -1939,7 +2081,16 @@ del "%~f0"
             return []
 
     def log(self, message):
-        self.log_queue.put(message)
+        import datetime
+        timestamp = datetime.datetime.now().strftime('%H:%M:%S')
+        stamped = f"[{timestamp}] {message}"
+        self.log_queue.put(stamped)
+        # Grava no arquivo de log persistente
+        try:
+            with open(LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(stamped + '\n')
+        except Exception:
+            pass
 
     def _drain_log_queue(self):
         try:
