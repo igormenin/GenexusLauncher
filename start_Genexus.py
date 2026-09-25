@@ -1549,7 +1549,9 @@ del "%~f0"
             if icon_data:
                 img = tk.PhotoImage(width=32, height=32)
                 for y, row_data in enumerate(icon_data):
-                    img.put(row_data, to=(0, y))
+                    for x, color in enumerate(row_data):
+                        if color:
+                            img.put(color, to=(x, y))
                 self.installation_icons[key] = img
                 return img
 
