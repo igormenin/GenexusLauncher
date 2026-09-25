@@ -1167,8 +1167,34 @@ class App(tk.Tk):
         btn_frame = ttk.Frame(dialog, padding=(10, 0, 10, 10))
         btn_frame.pack(fill='x')
 
-        path_label = ttk.Label(btn_frame, text=f"Arquivo: {LOG_FILE}", font=('', 7), foreground='gray')
-        path_label.pack(side='left', anchor='w')
+        # Linha inferior esquerda: caminho do arquivo + e-mail de destino
+        info_frame = ttk.Frame(btn_frame)
+        info_frame.pack(side='left', anchor='w')
+
+        path_label = ttk.Label(info_frame, text=f"Arquivo: {LOG_FILE}", font=('', 7), foreground='gray')
+        path_label.pack(anchor='w')
+
+        email_label = ttk.Label(
+            info_frame,
+            text=f"Envie o arquivo para: {LOG_EMAIL}  📋",
+            font=('', 7, 'bold'),
+            foreground='gray',
+            cursor='hand2',
+        )
+        email_label.pack(anchor='w')
+
+        def _copy_email(event=None):
+            dialog.clipboard_clear()
+            dialog.clipboard_append(LOG_EMAIL)
+            dialog.update()
+            email_label.config(text="✔ E-mail copiado!")
+            dialog.after(2000, lambda: email_label.config(
+                text=f"Envie o arquivo para: {LOG_EMAIL}  📋"
+            ))
+
+        email_label.bind("<Button-1>", _copy_email)
+        email_label.bind("<Enter>", lambda e: email_label.config(foreground='#5cacee'))
+        email_label.bind("<Leave>", lambda e: email_label.config(foreground='gray'))
 
         def _download_log():
             from tkinter import filedialog
@@ -1187,26 +1213,10 @@ class App(tk.Tk):
                 except Exception as e:
                     messagebox.showerror(APP_TITLE, f"Erro ao salvar:\n{e}", parent=dialog)
 
-        def _send_email_log():
-            try:
-                import urllib.parse
-                subject = urllib.parse.quote(f"GeneXus Launcher — Log de suporte (v{self._get_version()})")
-                body_preview = log_content[-3000:] if len(log_content) > 3000 else log_content
-                body = urllib.parse.quote(
-                    f"Olá Igor,\n\nSegue o log do GeneXus Launcher para análise.\n\n"
-                    f"--- LOG ---\n{body_preview}\n\n"
-                    f"Arquivo completo: {LOG_FILE}"
-                )
-                mailto = f"mailto:{LOG_EMAIL}?subject={subject}&body={body}"
-                webbrowser.open(mailto)
-            except Exception as e:
-                messagebox.showerror(APP_TITLE, f"Não foi possível abrir o cliente de e-mail:\n{e}", parent=dialog)
-
         right_btns = ttk.Frame(btn_frame)
         right_btns.pack(side='right')
 
         ttk.Button(right_btns, text="Fechar", command=dialog.destroy).pack(side='right')
-        ttk.Button(right_btns, text="📧 Enviar por E-mail", command=_send_email_log).pack(side='right', padx=(0, 6))
         ttk.Button(right_btns, text="⬇ Baixar .txt", command=_download_log).pack(side='right', padx=(0, 6))
 
         center_window(dialog, self)
@@ -1347,19 +1357,51 @@ class App(tk.Tk):
         thread.start()
 
     def _auto_scan_worker(self, root_path):
-        self.log(f"[Scan] Worker iniciado. Caminho raiz: {root_path}")
+        self.log(f"[Scan] Worker iniciado. Caminho raiz selecionado: {root_path}")
         found_paths = []
-        ignore_folders = {'windows', '$recycle.bin', 'users', 'usuários', 'system volume information', 'programdata', 'temp'}
+        ignore_folders = {
+            'windows', '$recycle.bin', 'users', 'usuários',
+            'system volume information', 'programdata', 'temp',
+            '.git', '.svn', 'node_modules', '__pycache__', '.venv'
+        }
         scanned_dirs = 0
         skipped_dirs = 0
 
+        def _on_walk_error(err):
+            self.log(f"[Scan] ⚠ Acesso restrito ou erro ao ler pasta: {getattr(err, 'filename', str(err))}")
+
         try:
-            for root, dirs, files in os.walk(root_path):
+            for root, dirs, files in os.walk(root_path, onerror=_on_walk_error):
                 scanned_dirs += 1
+
+                # Calcula profundidade relativa para exibir a estrutura de pastas
+                try:
+                    rel = os.path.relpath(root, root_path)
+                    depth = 0 if rel == '.' else len(Path(rel).parts)
+                except Exception:
+                    depth = 1
+
+                # Exibe a estrutura de navegação
+                if depth == 0:
+                    self.log(f"[Scan] 📁 Raiz: {root}")
+                elif depth <= 3:
+                    indent = "  " * depth
+                    self.log(f"[Scan] {indent}📁 {root}")
+                elif "gene" in root.lower() or "gx" in root.lower():
+                    self.log(f"[Scan]       📁 {root} (pasta potencial)")
+                elif scanned_dirs % 150 == 0:
+                    self.log(f"[Scan]   ... percorrendo subpastas (atualmente em: {root} | {scanned_dirs} pastas examinadas)")
+
+                # Registra pastas ignoradas de topo
+                if depth <= 1:
+                    ignored_here = [d for d in dirs if d.lower() in ignore_folders]
+                    for ign in ignored_here:
+                        self.log(f"[Scan]   ⏭ Ignorando pasta reservada/sistema: {os.path.join(root, ign)}")
+
                 # Filtra pastas ignoradas
                 original_count = len(dirs)
                 dirs[:] = [d for d in dirs if d.lower() not in ignore_folders]
-                skipped_dirs += original_count - len(dirs)
+                skipped_dirs += (original_count - len(dirs))
 
                 files_lower = [f.lower() for f in files]
                 if 'genexus.exe' in files_lower:
@@ -1369,12 +1411,11 @@ class App(tk.Tk):
                     else:
                         self.log(f"[Scan] ⚠ genexus.exe encontrado em '{root}', mas gxlmgr.exe ausente — ignorado.")
 
-        except PermissionError as e:
-            self.log(f"[Scan] Sem permissão para acessar pasta: {e}")
         except Exception as e:
             self.log(f"[Scan] Erro durante a varredura: {e}")
 
-        self.log(f"[Scan] Varredura concluída. Pastas verificadas: {scanned_dirs} | ignoradas: {skipped_dirs} | instalações encontradas: {len(found_paths)}")
+        self.log(f"[Scan] Varredura concluída.")
+        self.log(f"[Scan] Estatísticas: {scanned_dirs} pastas examinadas | {skipped_dirs} ramos ignorados | {len(found_paths)} instalações válidas encontradas.")
         self.after(0, self.hide_loading)
         if not found_paths:
             self.log("[Scan] Nenhuma instalação válida encontrada. Exibindo aviso ao usuário.")
@@ -2094,13 +2135,18 @@ del "%~f0"
 
     def _drain_log_queue(self):
         try:
+            messages = []
             while True:
-                message = self.log_queue.get_nowait()
+                try:
+                    messages.append(self.log_queue.get_nowait())
+                except queue.Empty:
+                    break
+            if messages:
                 self.log_text.config(state='normal')
-                self.log_text.insert(tk.END, message + '\n')
+                self.log_text.insert(tk.END, '\n'.join(messages) + '\n')
                 self.log_text.config(state='disabled')
                 self.log_text.see(tk.END)
-        except queue.Empty:
+        except Exception:
             pass
         finally:
             self.after(150, self._drain_log_queue)
